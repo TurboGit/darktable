@@ -247,6 +247,8 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
   cairo_scale(cr, zoom_scale, zoom_scale);
   cairo_translate(cr, -.5f*wd-zoom_x*wd, -.5f*ht-zoom_y*ht);
 
+  printf("vals %f %f   %d %d  %f  %f %f\n",wd,ht,width,height,zoom_scale, zoom_x, zoom_y);
+
   for(int i=0; i<p->num_spots; i++)
   {
     const float rad = MIN(wd, ht)*p->spot[i].radius;

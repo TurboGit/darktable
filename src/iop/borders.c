@@ -142,11 +142,11 @@ groups ()
   return IOP_GROUP_EFFECT;
 }
 
-int
+/*int
 operation_tags ()
 {
   return IOP_TAG_DISTORT;
-}
+}*/
 
 int flags()
 {
