@@ -395,7 +395,7 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
 
   //printf("vals %f %f   %d %d  %f  %f %f\n",wd,ht,width,height,zoom_scale, zoom_x, zoom_y);
 
-double dashed[] = {4.0, 2.0};
+  double dashed[] = {4.0, 2.0};
   dashed[0] /= zoom_scale;
   dashed[1] /= zoom_scale;
   
@@ -404,11 +404,9 @@ double dashed[] = {4.0, 2.0};
     
     if (!g->spot[i].ok)
     {
-      printf("post add %f %f\n",wd,ht);
       gui_spot_add(self,&g->spot[i],i);
     }
     spot_draw_t gspt = g->spot[i];
-  printf("nb points %d %d %f %f\n",i,gspt.pts_count, gspt.spot[2], gspt.spot[3]);
     if (gspt.pts_count < 4) continue;
     cairo_set_dash(cr, dashed, 0, 0);
     
@@ -479,7 +477,6 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
   if(g->dragging < 0) for(int i=0; i<p->num_spots; i++)
     {
       if (!g->spot[i].ok) continue;
-      printf("move %d %d %f %f\n",i,g->spot[i].ok,g->spot[i].source[0],g->spot[i].source[1]);
       float dist = (pzx*wd - g->spot[i].spot[0])*(pzx*wd - g->spot[i].spot[0]) + (pzy*ht - g->spot[i].spot[1])*(pzy*ht - g->spot[i].spot[1]);
       if(dist < mind)
       {

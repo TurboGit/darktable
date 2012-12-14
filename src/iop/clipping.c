@@ -217,6 +217,68 @@ transform(float *x, float *o, const float *m, const float t_h, const float t_v)
   o[0] *= (1.0f + o[1]*t_v);
 }
 
+
+
+int distort_transform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, float *points, int points_count)
+{
+  if (!self->enabled) return 2;
+dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
+  for (int i=0; i<points_count*2; i+=2)
+  {
+    float pi[2], po[2];
+    pi[0] = points[i] - d->tx + .5;
+    pi[1] = points[i+1] - d->ty + .5;
+    // transform this point using matrix m
+    transform(pi, po, d->m, d->k_h, d->k_v);
+    
+    if(d->flip)
+    {
+      po[1] += d->tx;
+      po[0] += d->ty;
+    }
+    else
+    {
+      po[0] += d->tx;
+      po[1] += d->ty;
+    }
+
+    points[i] = po[0] - d->cix;
+    points[i+1] = po[1] - d->ciy;
+  }
+  
+  return 1;
+}
+int distort_backtransform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, float *points, int points_count)
+{
+  if (!self->enabled) return 2;
+dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
+  for (int i=0; i<points_count*2; i+=2)
+  {
+    float pi[2], po[2];
+    pi[0] = d->cix + points[i] + .5;
+    pi[1] = d->ciy + points[i+1] + .5;
+    // transform this point using matrix m
+    if(d->flip)
+    {
+      pi[1] -= d->tx;
+      pi[0] -= d->ty;
+    }
+    else
+    {
+      pi[0] -= d->tx;
+      pi[1] -= d->ty;
+    }
+
+    backtransform(pi, po, d->m, d->k_h, d->k_v);
+
+    points[i] = po[0] + d->tx;
+    points[i+1] = po[1] + d->ty;
+  }
+  
+  return 1;
+}
+
+
 // 1st pass: how large would the output be, given this input roi?
 // this is always called with the full buffer before processing.
 void modify_roi_out(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *piece, dt_iop_roi_t *roi_out, const dt_iop_roi_t *roi_in_orig)
@@ -388,6 +450,7 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
 {
   dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
 
+  printf("clip vals %f %f %f %f %f %d %d\n",d->ty,d->tx,d->ciy, d->cix, roi_out->scale, piece->iwidth, piece->iheight);
   const int ch = piece->colors;
   const int ch_width = ch*roi_in->width;
 
