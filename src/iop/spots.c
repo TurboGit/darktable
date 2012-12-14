@@ -47,12 +47,29 @@ typedef struct dt_iop_spots_params_t
 }
 dt_iop_spots_params_t;
 
+typedef struct spot_draw_t
+{
+  //for both source and spot, first point is the center
+  // points to draw the source
+  float *source;
+  // points to draw the spot
+  float *spot;
+  //how many points in the buffers ? (including centers)
+  int pts_count;
+  //is the buffers allocated ? 
+  int ok;
+}
+spot_draw_t;
+
 typedef struct dt_iop_spots_gui_data_t
 {
   GtkLabel *label;
   int dragging;
   int selected;
   gboolean hoover_c; // is the pointer over the "clone from" end?
+  
+  spot_draw_t spot[32];
+  int nb_added;
 }
 dt_iop_spots_gui_data_t;
 
@@ -70,10 +87,124 @@ groups ()
   return IOP_GROUP_CORRECT;
 }
 
-int
+/*int
 operation_tags_filter ()
 {
   return IOP_TAG_DISTORT;
+}*/
+
+static void gui_spot_add(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
+{
+  dt_develop_t *dev = self->dev;
+  dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
+  float wd = dev->preview_pipe->iwidth;
+  float ht = dev->preview_pipe->iheight;
+
+  //how many points do we need ?
+  float r = p->spot[spot_index].radius*MIN(wd, ht);
+  int l = (int) (2.0*M_PI*r);
+  
+  //buffer allocations
+  gspt->source = malloc(2*(l+1)*sizeof(float));
+  gspt->spot = malloc(2*(l+1)*sizeof(float));
+  gspt->pts_count = l+1;
+  
+  
+  //now we set the points
+  gspt->source[0] = p->spot[spot_index].xc*wd;
+  gspt->source[1] = p->spot[spot_index].yc*ht;
+  gspt->spot[0] = p->spot[spot_index].x*wd;
+  gspt->spot[1] = p->spot[spot_index].y*ht;
+  for (int i=1; i<l+1; i++)
+  {
+    float alpha = (i-1)*2.0*M_PI/(float) l;
+    gspt->source[i*2] = p->spot[spot_index].xc*wd + r*cosf(alpha);
+    gspt->source[i*2+1] = p->spot[spot_index].yc*ht + r*sinf(alpha);
+    gspt->spot[i*2] = p->spot[spot_index].x*wd + r*cosf(alpha);
+    gspt->spot[i*2+1] = p->spot[spot_index].y*ht + r*sinf(alpha);
+  }
+  
+  //and we do the transforms
+  dt_dev_distort_transform(dev,gspt->source,l+1);
+  dt_dev_distort_transform(dev,gspt->spot,l+1);
+  
+  printf("add %d %d\n",spot_index,gspt->pts_count);
+  gspt->ok = 1;
+}
+static void gui_spot_remove(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
+{
+  printf("remove %d\n",spot_index);
+  gspt->pts_count = 0;
+  free(gspt->source);
+  gspt->source = NULL;
+  free(gspt->spot);
+  gspt->spot = NULL;
+  gspt->ok = 0;
+}
+static void gui_spot_update_source(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
+{
+  //no need to re-allocate the buffer as there is no radius change
+  dt_develop_t *dev = self->dev;
+  dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
+  float wd = dev->preview_pipe->iwidth;
+  float ht = dev->preview_pipe->iheight;
+  
+  if (gspt->pts_count == 0) return;
+  
+  
+  //how many points do we need ?
+  float r = p->spot[spot_index].radius*MIN(wd, ht);
+  int l = gspt->pts_count -1;
+  
+  //now we set the points
+  gspt->source[0] = p->spot[spot_index].xc*wd;
+  gspt->source[1] = p->spot[spot_index].yc*ht;
+  for (int i=1; i<l+1; i++)
+  {
+    float alpha = (i-1)*2.0*M_PI/(float) l;
+    gspt->source[i*2] = p->spot[spot_index].xc*wd + r*cosf(alpha);
+    gspt->source[i*2+1] = p->spot[spot_index].yc*ht + r*sinf(alpha);
+  }
+  
+  //and we do the transforms
+  dt_dev_distort_transform(dev,gspt->source,l+1);
+  printf("src %d %d\n",spot_index,gspt->pts_count);
+}
+static void gui_spot_update_spot(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
+{
+  //no need to re-allocate the buffer as there is no radius change
+  dt_develop_t *dev = self->dev;
+  dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
+  float wd = dev->preview_pipe->iwidth;
+  float ht = dev->preview_pipe->iheight;
+  
+  if (gspt->pts_count == 0) return;
+  
+  //how many points do we need ?
+  float r = p->spot[spot_index].radius*MIN(wd, ht);
+  int l = gspt->pts_count -1;
+  
+  //now we set the points
+  gspt->spot[0] = p->spot[spot_index].x*wd;
+  gspt->spot[1] = p->spot[spot_index].y*ht;
+  for (int i=1; i<l+1; i++)
+  {
+    float alpha = (i-1)*2.0*M_PI/(float) l;
+    gspt->spot[i*2] = p->spot[spot_index].x*wd + r*cosf(alpha);
+    gspt->spot[i*2+1] = p->spot[spot_index].y*ht + r*sinf(alpha);
+  }
+  
+  //and we do the transforms
+  dt_dev_distort_transform(dev,gspt->spot,l+1);
+  printf("spt %d %d\n",spot_index,gspt->pts_count);
+}
+static void gui_spot_update_radius(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
+{
+  if (gspt->pts_count == 0) return;
+  
+  //we remove and re-add the point
+  gui_spot_remove(self,gspt,spot_index);
+  gui_spot_add(self,gspt,spot_index);
 }
 
 // FIXME: doesn't work if source is outside of ROI
@@ -184,14 +315,23 @@ void gui_update    (dt_iop_module_t *self)
   char str[3];
   snprintf(str,3,"%d",p->num_spots);
   gtk_label_set_text(g->label, str);
+  for (int i=0; i<p->num_spots; i++)
+  {
+    //gui_spot_add(self,&g->spot[i],i);
+  }
 }
 
 void gui_init     (dt_iop_module_t *self)
 {
   self->gui_data = malloc(sizeof(dt_iop_spots_gui_data_t));
+  //dt_iop_spots_params_t *p = (dt_iop_spots_params_t *)self->params;
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   g->dragging = -1;
   g->selected = -1;
+  for (int i=0; i<32; i++)
+  {
+    g->spot[i].ok = 0;
+  }
   self->widget = gtk_vbox_new(FALSE, 5);
   GtkWidget *label = gtk_label_new(_("click on a spot and drag on canvas to heal.\nuse the mouse wheel to adjust size.\nright click to remove a stroke."));
   gtk_misc_set_alignment(GTK_MISC(label), 0.0f, 0.5f);
@@ -206,12 +346,17 @@ void gui_init     (dt_iop_module_t *self)
 
 void gui_cleanup  (dt_iop_module_t *self)
 {
+  dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   // nothing else necessary, gtk will clean up the labels
+  for (int i=0; i<32; i++)
+  {
+    if (g->spot[i].ok) gui_spot_remove(self,&g->spot[i],i);
+  }
   free(self->gui_data);
   self->gui_data = NULL;
 }
 
-static void draw_overlay(cairo_t *cr, float rad, float x, float y, float xc, float yc, float xr, float yr)
+/*static void draw_overlay(cairo_t *cr, float rad, float x, float y, float xc, float yc, float xr, float yr)
 {
   cairo_arc (cr, x, y, rad, 0, 2.0*M_PI);
   cairo_stroke (cr);
@@ -220,7 +365,7 @@ static void draw_overlay(cairo_t *cr, float rad, float x, float y, float xc, flo
   cairo_move_to (cr, xr, yr);
   cairo_line_to (cr, xc, yc);
   cairo_stroke (cr);
-}
+}*/
 
 void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t height, int32_t pointerx, int32_t pointery)
 {
@@ -229,6 +374,7 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   float wd = dev->preview_pipe->backbuf_width;
   float ht = dev->preview_pipe->backbuf_height;
+  if (wd < 1.0 || ht < 1.0) return;
   float pzx, pzy;
   dt_dev_get_pointer_zoom_pos(dev, pointerx, pointery, &pzx, &pzy);
   pzx += 0.5f;
@@ -247,11 +393,48 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
   cairo_scale(cr, zoom_scale, zoom_scale);
   cairo_translate(cr, -.5f*wd-zoom_x*wd, -.5f*ht-zoom_y*ht);
 
-  printf("vals %f %f   %d %d  %f  %f %f\n",wd,ht,width,height,zoom_scale, zoom_x, zoom_y);
+  //printf("vals %f %f   %d %d  %f  %f %f\n",wd,ht,width,height,zoom_scale, zoom_x, zoom_y);
 
+double dashed[] = {4.0, 2.0};
+  dashed[0] /= zoom_scale;
+  dashed[1] /= zoom_scale;
+  
   for(int i=0; i<p->num_spots; i++)
   {
-    const float rad = MIN(wd, ht)*p->spot[i].radius;
+    
+    if (!g->spot[i].ok)
+    {
+      printf("post add %f %f\n",wd,ht);
+      gui_spot_add(self,&g->spot[i],i);
+    }
+    spot_draw_t gspt = g->spot[i];
+  printf("nb points %d %d %f %f\n",i,gspt.pts_count, gspt.spot[2], gspt.spot[3]);
+    if (gspt.pts_count < 4) continue;
+    cairo_set_dash(cr, dashed, 0, 0);
+    
+    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
+    cairo_set_source_rgba(cr, .8, .8, .8, .8);
+    cairo_move_to(cr,gspt.source[2],gspt.source[3]);
+    for (int i=2; i<gspt.pts_count; i++)
+    {
+      cairo_line_to(cr,gspt.source[i*2],gspt.source[i*2+1]);
+    }
+    cairo_line_to(cr,gspt.source[2],gspt.source[3]);
+    cairo_stroke(cr);
+    
+    cairo_move_to(cr,gspt.spot[2],gspt.spot[3]);
+    for (int i=2; i<gspt.pts_count; i++)
+    {
+      cairo_line_to(cr,gspt.spot[i*2],gspt.spot[i*2+1]);
+    }
+    cairo_line_to(cr,gspt.spot[2],gspt.spot[3]);
+    cairo_stroke(cr);
+    
+    cairo_move_to(cr,gspt.source[0],gspt.source[1]);
+    cairo_line_to(cr,gspt.spot[0],gspt.spot[1]);
+    cairo_stroke(cr);
+    /*const float rad = MIN(wd, ht)*p->spot[i].radius;
     const float dx = p->spot[i].xc - p->spot[i].x;
     float dy = p->spot[i].yc - p->spot[i].y;
     if(dx == 0.0 && dy == 0.0) dy = EPSILON; // otherwise we'll have ol = 1.0/0.0 ==> xr = yr = -nan
@@ -271,7 +454,7 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
     if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
     else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
     cairo_set_source_rgba(cr, .8, .8, .8, .8);
-    draw_overlay(cr, rad, x, y, xc, yc, xr, yr);
+    draw_overlay(cr, rad, x, y, xc, yc, xr, yr);*/
 
   }
 }
@@ -284,6 +467,8 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
   // highlight selected point, if any
   float pzx, pzy;
   dt_dev_get_pointer_zoom_pos(self->dev, x, y, &pzx, &pzy);
+  float wd = self->dev->preview_pipe->backbuf_width;
+  float ht = self->dev->preview_pipe->backbuf_height;
   pzx += 0.5f;
   pzy += 0.5f;
   float mind = FLT_MAX;
@@ -293,14 +478,16 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
   g->selected = -1;
   if(g->dragging < 0) for(int i=0; i<p->num_spots; i++)
     {
-      float dist = (pzx - p->spot[i].x)*(pzx - p->spot[i].x) + (pzy - p->spot[i].y)*(pzy - p->spot[i].y);
+      if (!g->spot[i].ok) continue;
+      printf("move %d %d %f %f\n",i,g->spot[i].ok,g->spot[i].source[0],g->spot[i].source[1]);
+      float dist = (pzx*wd - g->spot[i].spot[0])*(pzx*wd - g->spot[i].spot[0]) + (pzy*ht - g->spot[i].spot[1])*(pzy*ht - g->spot[i].spot[1]);
       if(dist < mind)
       {
         mind = dist;
         selected = i;
         hoover_c = FALSE;
       }
-      dist = (pzx - p->spot[i].xc)*(pzx - p->spot[i].xc) + (pzy - p->spot[i].yc)*(pzy - p->spot[i].yc);
+      dist = (pzx*wd - g->spot[i].source[0])*(pzx*wd - g->spot[i].source[0]) + (pzy*ht - g->spot[i].source[1])*(pzy*ht - g->spot[i].source[1]);
       if(dist < mind)
       {
         mind = dist;
@@ -321,7 +508,7 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
       p->spot[g->dragging].y = pzy;
     }
   }
-  if(selected >= 0 && mind < p->spot[selected].radius * p->spot[selected].radius)
+  if(selected >= 0 && mind < p->spot[selected].radius * p->spot[selected].radius * wd * wd)
   {
     g->selected = selected;
     g->hoover_c = hoover_c;
@@ -338,6 +525,7 @@ int scrolled(dt_iop_module_t *self, double x, double y, int up, uint32_t state)
   {
     if(up && p->spot[g->selected].radius > 0.005f) p->spot[g->selected].radius *= 0.9f;
     else  if(p->spot[g->selected].radius < 0.1f  ) p->spot[g->selected].radius *= 1.0f/0.9f;
+    gui_spot_update_radius(self,&g->spot[g->selected],g->selected);
     dt_dev_add_history_item(darktable.develop, self, TRUE);
     return 1;
   }
@@ -366,11 +554,19 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
       const int i = p->num_spots++;
       g->dragging = i;
       // on *wd|*ht scale, radius on *min(wd, ht).
-      p->spot[i].x = p->spot[i].xc = pzx;
-      p->spot[i].y = p->spot[i].yc = pzy;
+      float wd = self->dev->preview_pipe->backbuf_width;
+      float ht = self->dev->preview_pipe->backbuf_height;
+      float pts[2] = {pzx*wd,pzy*ht};
+      dt_dev_distort_backtransform(self->dev,pts,1);
+      p->spot[i].x = p->spot[i].xc = pts[0]/self->dev->preview_pipe->iwidth;
+      p->spot[i].y = p->spot[i].yc = pts[1]/self->dev->preview_pipe->iheight;
       p->spot[i].radius = 0.01f;
+      gui_spot_add(self,&g->spot[i],i);
+      printf("add %p\n",g->spot);
+      printf("after add %d %d %d\n",g->spot[i].pts_count,g->nb_added,g->spot[i].ok);
       g->selected = i;
       g->hoover_c = TRUE;
+      
     }
     else
     {
@@ -393,15 +589,21 @@ int button_released(struct dt_iop_module_t *self, double x, double y, int which,
     pzx += 0.5f;
     pzy += 0.5f;
     const int i = g->dragging;
+    float wd = self->dev->preview_pipe->backbuf_width;
+    float ht = self->dev->preview_pipe->backbuf_height;
+    float pts[2] = {pzx*wd,pzy*ht};
+    dt_dev_distort_backtransform(self->dev,pts,1);
     if(g->hoover_c)
     {
-      p->spot[i].xc = pzx;
-      p->spot[i].yc = pzy;
+      p->spot[i].xc = pts[0]/self->dev->preview_pipe->iwidth;
+      p->spot[i].yc = pts[1]/self->dev->preview_pipe->iheight;
+      gui_spot_update_source(self,&g->spot[i],i);
     }
     else
     {
-      p->spot[i].x = pzx;
-      p->spot[i].y = pzy;
+      p->spot[i].x = pts[0]/self->dev->preview_pipe->iwidth;
+      p->spot[i].y = pts[1]/self->dev->preview_pipe->iheight;
+      gui_spot_update_spot(self,&g->spot[i],i);
     }
     g->selected = -1;
     dt_dev_add_history_item(darktable.develop, self, TRUE);
@@ -416,7 +618,12 @@ int button_released(struct dt_iop_module_t *self, double x, double y, int which,
   {
     // remove brush stroke
     const int i = --(p->num_spots);
-    if(i > 0) memcpy(p->spot + g->selected, p->spot + i, sizeof(spot_t));
+    if(i > 0)
+    {
+      memcpy(p->spot + g->selected, p->spot + i, sizeof(spot_t));
+      gui_spot_remove(self,&g->spot[g->selected],g->selected);
+      memcpy(g->spot + g->selected, g->spot + i, sizeof(spot_draw_t));
+    }
     dt_dev_add_history_item(darktable.develop, self, TRUE);
     g->selected = -1;
     char str[3];

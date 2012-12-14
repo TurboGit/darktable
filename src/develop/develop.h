@@ -202,6 +202,9 @@ void dt_dev_snapshot_request(dt_develop_t *dev, const char *filename);
 /** update gliding average for pixelpipe delay */
 void dt_dev_average_delay_update(const dt_times_t *start, uint32_t *average_delay);
 
+void dt_dev_distort_transform(dt_develop_t *dev, float *points, int points_count);
+void dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_count);
+
 #endif
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
 // vim: shiftwidth=2 expandtab tabstop=2 cindent

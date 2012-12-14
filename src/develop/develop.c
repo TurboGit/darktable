@@ -1082,6 +1082,38 @@ void dt_dev_average_delay_update(const dt_times_t *start, uint32_t *average_dela
   *average_delay += ((end.clock - start->clock)*1000/DT_DEV_AVERAGE_DELAY_COUNT - *average_delay/DT_DEV_AVERAGE_DELAY_COUNT);
 }
 
+void dt_dev_distort_transform(dt_develop_t *dev, float *points, int points_count)
+{
+  GList *modules = g_list_last(dev->iop);
+  GList *pieces = g_list_last(dev->preview_pipe->nodes);
+  while (modules)
+  {
+    dt_iop_module_t *module = (dt_iop_module_t *) (modules->data);
+    dt_dev_pixelpipe_iop_t *piece = (dt_dev_pixelpipe_iop_t *) (pieces->data);
+    
+    module->distort_transform(module,piece,points,points_count);
+    
+    modules = g_list_previous(modules);
+    pieces = g_list_previous(pieces);
+  }
+}
+
+void dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_count)
+{
+  GList *modules = g_list_first(dev->iop);
+  GList *pieces = g_list_first(dev->preview_pipe->nodes);
+  while (modules)
+  {
+    dt_iop_module_t *module = (dt_iop_module_t *) (modules->data);
+    dt_dev_pixelpipe_iop_t *piece = (dt_dev_pixelpipe_iop_t *) (pieces->data);
+    
+    module->distort_backtransform(module,piece,points,points_count);
+    
+    modules = g_list_next(modules);
+    pieces = g_list_next(pieces);
+  }
+}
+
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
 // vim: shiftwidth=2 expandtab tabstop=2 cindent
 // kate: tab-indents: off; indent-width 2; replace-tabs on; indent-mode cstyle; remove-trailing-space on;

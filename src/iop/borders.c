@@ -174,6 +174,47 @@ void connect_key_accels(dt_iop_module_t *self)
   dt_accel_connect_slider_iop(self, "frame line size", GTK_WIDGET(g->frame_size));
 }
 
+int distort_transform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, float *points, int points_count)
+{
+  if (!self->enabled) return 2;
+  dt_iop_borders_data_t *d = (dt_iop_borders_data_t *)piece->data;
+  
+  printf("backtr %d %d   %d %d  %f %f\n",piece->buf_out.width,piece->buf_out.height,piece->buf_in.width,piece->buf_in.height, d->pos_v, d->pos_h);
+
+  const int border_tot_width  = (piece->buf_out.width  - piece->buf_in.width );
+  const int border_tot_height = (piece->buf_out.height - piece->buf_in.height);
+  const int border_size_t = border_tot_height*d->pos_v;
+  const int border_size_l = border_tot_width*d->pos_h;
+  
+  for (int i=0; i<points_count*2; i+=2)
+  {
+    points[i] += border_size_l;
+    points[i+1] += border_size_t;
+  }
+  
+  return 1;
+}
+int distort_backtransform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, float *points, int points_count)
+{
+  if (!self->enabled) return 2;
+  dt_iop_borders_data_t *d = (dt_iop_borders_data_t *)piece->data;
+  
+  printf("backtr %d %d   %d %d  %f %f\n",piece->buf_out.width,piece->buf_out.height,piece->buf_in.width,piece->buf_in.height, d->pos_v, d->pos_h);
+
+  const int border_tot_width  = (piece->buf_out.width  - piece->buf_in.width );
+  const int border_tot_height = (piece->buf_out.height - piece->buf_in.height);
+  const int border_size_t = border_tot_height*d->pos_v;
+  const int border_size_l = border_tot_width*d->pos_h;
+  
+  for (int i=0; i<points_count*2; i+=2)
+  {
+    points[i] -= border_size_l;
+    points[i+1] -= border_size_t;
+  }
+  
+  return 1;
+}
+
 // 1st pass: how large would the output be, given this input roi?
 // this is always called with the full buffer before processing.
 void

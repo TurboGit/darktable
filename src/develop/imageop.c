@@ -255,12 +255,12 @@ default_simple_togglebutton_callback(GtkWidget *w, dt_iop_gui_simple_callback_t 
 }
 
 static int
-default_distort_transform(dt_iop_module_t *self, float *points, int points_count)
+default_distort_transform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, float *points, int points_count)
 {
   return 1;
 }
 static int
-default_distort_backtransform(dt_iop_module_t *self, float *points, int points_count)
+default_distort_backtransform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, float *points, int points_count)
 {
   return 1;
 }
