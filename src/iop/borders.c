@@ -184,9 +184,6 @@ int distort_transform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, floa
   const int border_size_t = border_tot_height*d->pos_v;
   const int border_size_l = border_tot_width*d->pos_h;
   
-  printf("transf out %d %d %d %d\n",piece->buf_out.width, piece->buf_out.height, piece->buf_out.x, piece->buf_out.y);
-  printf("transf in %d %d %d %d\n",piece->buf_in.width, piece->buf_in.height, piece->buf_in.x, piece->buf_in.y);
-  
   for (int i=0; i<points_count*2; i+=2)
   {
     points[i] += border_size_l;

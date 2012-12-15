@@ -131,7 +131,7 @@ int distort_transform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, floa
   dt_iop_flip_data_t *d = (dt_iop_flip_data_t *)piece->data;
 
   float x,y;
-printf("flip tr %d %d %d\n",piece->buf_in.width,piece->buf_in.height,d->orientation);
+
   for (int i=0; i<points_count*2; i+=2)
   {  
     x = points[i];

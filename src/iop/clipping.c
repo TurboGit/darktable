@@ -450,7 +450,6 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
 {
   dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
 
-  printf("clip vals %f %f %f %f %f %d %d\n",d->ty,d->tx,d->ciy, d->cix, roi_out->scale, piece->iwidth, piece->iheight);
   const int ch = piece->colors;
   const int ch_width = ch*roi_in->width;
 

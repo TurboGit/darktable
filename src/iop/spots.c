@@ -128,12 +128,10 @@ static void gui_spot_add(dt_iop_module_t *self, spot_draw_t *gspt, int spot_inde
   dt_dev_distort_transform(dev,gspt->source,l+1);
   dt_dev_distort_transform(dev,gspt->spot,l+1);
   
-  printf("add %d %d\n",spot_index,gspt->pts_count);
   gspt->ok = 1;
 }
 static void gui_spot_remove(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
 {
-  printf("remove %d\n",spot_index);
   gspt->pts_count = 0;
   free(gspt->source);
   gspt->source = NULL;
@@ -168,7 +166,6 @@ static void gui_spot_update_source(dt_iop_module_t *self, spot_draw_t *gspt, int
   
   //and we do the transforms
   dt_dev_distort_transform(dev,gspt->source,l+1);
-  printf("src %d %d\n",spot_index,gspt->pts_count);
 }
 static void gui_spot_update_spot(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
 {
@@ -196,7 +193,6 @@ static void gui_spot_update_spot(dt_iop_module_t *self, spot_draw_t *gspt, int s
   
   //and we do the transforms
   dt_dev_distort_transform(dev,gspt->spot,l+1);
-  printf("spt %d %d\n",spot_index,gspt->pts_count);
 }
 static void gui_spot_update_radius(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
 {
@@ -313,7 +309,6 @@ void gui_focus (struct dt_iop_module_t *self, gboolean in)
 /** commit is the synch point between core and gui, so it copies params to pipe data. */
 void commit_params (struct dt_iop_module_t *self, dt_iop_params_t *params, dt_dev_pixelpipe_t *pipe, dt_dev_pixelpipe_iop_t *piece)
 {
-  printf("comit params\n");
   memcpy(piece->data, params, sizeof(dt_iop_spots_params_t));
 }
 
@@ -331,7 +326,6 @@ void cleanup_pipe  (struct dt_iop_module_t *self, dt_dev_pixelpipe_t *pipe, dt_d
 /** gui callbacks, these are needed. */
 void gui_update    (dt_iop_module_t *self)
 {
-  printf("gui update\n");
   dt_iop_spots_params_t *p = (dt_iop_spots_params_t *)self->params;
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   char str[3];
@@ -345,7 +339,6 @@ void gui_update    (dt_iop_module_t *self)
 
 void gui_init     (dt_iop_module_t *self)
 {
-  printf("gui init\n");
   self->gui_data = malloc(sizeof(dt_iop_spots_gui_data_t));
   //dt_iop_spots_params_t *p = (dt_iop_spots_params_t *)self->params;
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
@@ -631,8 +624,6 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
       p->spot[i].y = p->spot[i].yc = pts[1]/self->dev->preview_pipe->iheight;
       p->spot[i].radius = 0.01f;
       gui_spot_add(self,&g->spot[i],i);
-      printf("add %p\n",g->spot);
-      printf("after add %d %d %d\n",g->spot[i].pts_count,g->nb_added,g->spot[i].ok);
       g->selected = i;
       g->hoover_c = TRUE;
       
