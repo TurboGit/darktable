@@ -1082,28 +1082,31 @@ void dt_dev_average_delay_update(const dt_times_t *start, uint32_t *average_dela
   *average_delay += ((end.clock - start->clock)*1000/DT_DEV_AVERAGE_DELAY_COUNT - *average_delay/DT_DEV_AVERAGE_DELAY_COUNT);
 }
 
-void dt_dev_distort_transform(dt_develop_t *dev, float *points, int points_count)
+int dt_dev_distort_transform(dt_develop_t *dev, float *points, int points_count)
 {
   GList *modules = g_list_last(dev->iop);
   GList *pieces = g_list_last(dev->preview_pipe->nodes);
   while (modules)
   {
+    if (!pieces) return 0;
     dt_iop_module_t *module = (dt_iop_module_t *) (modules->data);
     dt_dev_pixelpipe_iop_t *piece = (dt_dev_pixelpipe_iop_t *) (pieces->data);
-    
+
     module->distort_transform(module,piece,points,points_count);
     
     modules = g_list_previous(modules);
     pieces = g_list_previous(pieces);
   }
+  return 1;
 }
 
-void dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_count)
+int dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_count)
 {
   GList *modules = g_list_first(dev->iop);
   GList *pieces = g_list_first(dev->preview_pipe->nodes);
   while (modules)
   {
+    if (!pieces) return 0;
     dt_iop_module_t *module = (dt_iop_module_t *) (modules->data);
     dt_dev_pixelpipe_iop_t *piece = (dt_dev_pixelpipe_iop_t *) (pieces->data);
     
@@ -1112,6 +1115,7 @@ void dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_c
     modules = g_list_next(modules);
     pieces = g_list_next(pieces);
   }
+  return 1;
 }
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

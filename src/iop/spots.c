@@ -69,7 +69,7 @@ typedef struct dt_iop_spots_gui_data_t
   gboolean hoover_c; // is the pointer over the "clone from" end?
   
   spot_draw_t spot[32];
-  int nb_added;
+  int image_id;
 }
 dt_iop_spots_gui_data_t;
 
@@ -125,10 +125,16 @@ static void gui_spot_add(dt_iop_module_t *self, spot_draw_t *gspt, int spot_inde
   }
   
   //and we do the transforms
-  dt_dev_distort_transform(dev,gspt->source,l+1);
-  dt_dev_distort_transform(dev,gspt->spot,l+1);
+  if (dt_dev_distort_transform(dev,gspt->source,l+1) && dt_dev_distort_transform(dev,gspt->spot,l+1))
+  {  
+    gspt->ok = 1;
+    return;
+  }
   
-  gspt->ok = 1;
+  //if we have an error, we free the buffers
+  gspt->pts_count = 0;
+  free(gspt->source);
+  free(gspt->spot);
 }
 static void gui_spot_remove(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
 {
@@ -288,12 +294,17 @@ void cleanup(dt_iop_module_t *module)
 
 void gui_focus (struct dt_iop_module_t *self, gboolean in)
 {
+  dt_iop_spots_params_t *p = (dt_iop_spots_params_t *)self->params;
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   if(self->enabled)
   {
     if(in)
     {
       // got focus.
+      for (int i=0; i<p->num_spots; i++)
+      {
+        if (!g->spot[i].ok) gui_spot_add(self,&g->spot[i],i);
+      }
     }
     else
     {
@@ -333,7 +344,7 @@ void gui_update    (dt_iop_module_t *self)
   gtk_label_set_text(g->label, str);
   for (int i=0; i<p->num_spots; i++)
   {
-    //gui_spot_add(self,&g->spot[i],i);
+    if (!g->spot[i].ok) gui_spot_add(self,&g->spot[i],i);
   }
 }
 
@@ -348,6 +359,8 @@ void gui_init     (dt_iop_module_t *self)
   {
     g->spot[i].ok = 0;
   }
+  g->image_id = -1;
+  
   self->widget = gtk_vbox_new(FALSE, 5);
   GtkWidget *label = gtk_label_new(_("click on a spot and drag on canvas to heal.\nuse the mouse wheel to adjust size.\nright click to remove a stroke."));
   gtk_misc_set_alignment(GTK_MISC(label), 0.0f, 0.5f);
@@ -409,11 +422,20 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
   cairo_scale(cr, zoom_scale, zoom_scale);
   cairo_translate(cr, -.5f*wd-zoom_x*wd, -.5f*ht-zoom_y*ht);
 
-  //printf("vals %f %f   %d %d  %f  %f %f\n",wd,ht,width,height,zoom_scale, zoom_x, zoom_y);
-
   double dashed[] = {4.0, 2.0};
   dashed[0] /= zoom_scale;
   dashed[1] /= zoom_scale;
+  
+  //if image has changed, we have to unalloc all draw buffers
+  if (g->image_id >= 0)
+  {
+    if (g->image_id != self->dev->preview_pipe->image.id)
+    {
+      for (int i=0; i<32; i++)
+        if (g->spot[i].ok) gui_spot_remove(self,&g->spot[i],i);
+      g->image_id = -1;
+    }
+  }
   
   for(int i=0; i<p->num_spots; i++)
   {
@@ -421,6 +443,8 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
     if (!g->spot[i].ok)
     {
       gui_spot_add(self,&g->spot[i],i);
+      if (!g->spot[i].ok) continue;
+      g->image_id = self->dev->preview_pipe->image.id;
     }
     spot_draw_t gspt = g->spot[i];
     if (gspt.pts_count < 4) continue;
