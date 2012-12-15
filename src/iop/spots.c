@@ -290,9 +290,30 @@ void cleanup(dt_iop_module_t *module)
   module->data = NULL;
 }
 
+void gui_focus (struct dt_iop_module_t *self, gboolean in)
+{
+  dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
+  if(self->enabled)
+  {
+    if(in)
+    {
+      // got focus.
+    }
+    else
+    {
+      // lost focus, delete all gui drawing
+      for (int i=0; i<32; i++)
+      {
+        if (g->spot[i].ok) gui_spot_remove(self,&g->spot[i],i);
+      }
+    }
+  }
+}
+
 /** commit is the synch point between core and gui, so it copies params to pipe data. */
 void commit_params (struct dt_iop_module_t *self, dt_iop_params_t *params, dt_dev_pixelpipe_t *pipe, dt_dev_pixelpipe_iop_t *piece)
 {
+  printf("comit params\n");
   memcpy(piece->data, params, sizeof(dt_iop_spots_params_t));
 }
 
@@ -310,6 +331,7 @@ void cleanup_pipe  (struct dt_iop_module_t *self, dt_dev_pixelpipe_t *pipe, dt_d
 /** gui callbacks, these are needed. */
 void gui_update    (dt_iop_module_t *self)
 {
+  printf("gui update\n");
   dt_iop_spots_params_t *p = (dt_iop_spots_params_t *)self->params;
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   char str[3];
@@ -323,6 +345,7 @@ void gui_update    (dt_iop_module_t *self)
 
 void gui_init     (dt_iop_module_t *self)
 {
+  printf("gui init\n");
   self->gui_data = malloc(sizeof(dt_iop_spots_gui_data_t));
   //dt_iop_spots_params_t *p = (dt_iop_spots_params_t *)self->params;
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
@@ -410,28 +433,77 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
     if (gspt.pts_count < 4) continue;
     cairo_set_dash(cr, dashed, 0, 0);
     
+    float src_x, src_y, spt_x, spt_y;
+    
+    //source
+    cairo_set_line_cap(cr,CAIRO_LINE_CAP_ROUND);
+    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 5.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 3.0/zoom_scale);
+    cairo_set_source_rgba(cr, .3, .3, .3, .8);
+    if (g->dragging == i && g->hoover_c)
+    {
+      src_x = p->spot[i].xc*wd;
+      src_y = p->spot[i].yc*ht;
+      cairo_arc (cr, src_x, src_y, 10.0, 0, 2.0*M_PI);
+    }
+    else
+    {
+      cairo_move_to(cr,gspt.source[2],gspt.source[3]);
+      for (int i=2; i<gspt.pts_count; i++)
+      {
+        cairo_line_to(cr,gspt.source[i*2],gspt.source[i*2+1]);
+      }
+      cairo_line_to(cr,gspt.source[2],gspt.source[3]);
+      src_x = gspt.source[0];
+      src_y = gspt.source[1];
+    }
+    cairo_stroke_preserve(cr);
     if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
     else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
     cairo_set_source_rgba(cr, .8, .8, .8, .8);
-    cairo_move_to(cr,gspt.source[2],gspt.source[3]);
-    for (int i=2; i<gspt.pts_count; i++)
-    {
-      cairo_line_to(cr,gspt.source[i*2],gspt.source[i*2+1]);
-    }
-    cairo_line_to(cr,gspt.source[2],gspt.source[3]);
     cairo_stroke(cr);
     
-    cairo_move_to(cr,gspt.spot[2],gspt.spot[3]);
-    for (int i=2; i<gspt.pts_count; i++)
+    //spot
+    cairo_set_line_cap(cr,CAIRO_LINE_CAP_ROUND);
+    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 5.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 3.0/zoom_scale);
+    cairo_set_source_rgba(cr, .3, .3, .3, .8);
+    if (g->dragging == i && !g->hoover_c)
     {
-      cairo_line_to(cr,gspt.spot[i*2],gspt.spot[i*2+1]);
+      spt_x = p->spot[i].x*wd;
+      spt_y = p->spot[i].y*ht;
+      cairo_arc (cr, spt_x, spt_y, 10.0, 0, 2.0*M_PI);
     }
-    cairo_line_to(cr,gspt.spot[2],gspt.spot[3]);
+    else
+    {
+      cairo_move_to(cr,gspt.spot[2],gspt.spot[3]);
+      for (int i=2; i<gspt.pts_count; i++)
+      {
+        cairo_line_to(cr,gspt.spot[i*2],gspt.spot[i*2+1]);
+      }
+      cairo_line_to(cr,gspt.spot[2],gspt.spot[3]);
+      spt_x = gspt.spot[0];
+      spt_y = gspt.spot[1];
+    }
+    cairo_stroke_preserve(cr);
+    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
+    cairo_set_source_rgba(cr, .8, .8, .8, .8);
     cairo_stroke(cr);
     
-    cairo_move_to(cr,gspt.source[0],gspt.source[1]);
-    cairo_line_to(cr,gspt.spot[0],gspt.spot[1]);
+    //line between
+    cairo_set_line_cap(cr,CAIRO_LINE_CAP_ROUND);
+    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 5.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 3.0/zoom_scale);
+    cairo_set_source_rgba(cr, .3, .3, .3, .8);
+    cairo_move_to(cr,src_x,src_y);
+    cairo_line_to(cr,spt_x,spt_y);
+    cairo_stroke_preserve(cr);
+    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
+    cairo_set_source_rgba(cr, .8, .8, .8, .8);
     cairo_stroke(cr);
+    
     /*const float rad = MIN(wd, ht)*p->spot[i].radius;
     const float dx = p->spot[i].xc - p->spot[i].x;
     float dy = p->spot[i].yc - p->spot[i].y;
