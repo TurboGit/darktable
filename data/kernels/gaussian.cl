@@ -16,8 +16,7 @@
     along with darktable.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-const sampler_t sampleri =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
-const sampler_t samplerf =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
+#include "common.h"
 
 
 /* This is gaussian blur in Lab space. Please mind: in contrast to most of DT's other openCL kernels,
@@ -214,7 +213,7 @@ lookup_unbounded(read_only image2d_t lut, const float x, global float *a)
   // path to linear unbounded (does not clip x at 1)
   if(a[0] >= 0.0f)
   {
-    if(x < 1.0f)
+    if(x < 1.0f/a[0])
     {
       const int xi = clamp(x*65535.0f, 0.0f, 65535.0f);
       const int2 p = (int2)((xi & 0xff), (xi >> 8));

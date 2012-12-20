@@ -83,8 +83,12 @@ typedef struct dt_opencl_device_t
   int eventsconsolidated;
   int maxevents;
   int lostevents;
+  int totalevents;
+  int totalsuccess;
+  int totallost;
   int nvidia_sm_20;
   const char *vendor;
+  const char *name;
   cl_int summary;
 }
 dt_opencl_device_t;
@@ -136,7 +140,7 @@ void dt_opencl_unlock_device(const int dev);
 int dt_opencl_load_program(const int dev, const int prog, const char *filename, const char* binname, const char* cachedir, char* md5sum, int* loaded_cached);
 
 /** builds the given program. */
-int dt_opencl_build_program(const int dev, const int prog, const char* binname, const char* cachedir, char* md5sum, int loaded_cached);
+int dt_opencl_build_program(const int dev, const int prog, const char* binname, const char* cachedir, char* md5sum, int loaded_cached, const char* kerneldir);
 
 /** inits a kernel. returns the index or -1 if fail. */
 int dt_opencl_create_kernel(const int program, const char *name);

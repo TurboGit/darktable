@@ -145,10 +145,14 @@ void dt_opencl_init(dt_opencl_t *cl, const int argc, char *argv[])
     cl->dev[dev].eventsconsolidated = 0;
     cl->dev[dev].maxevents = 0;
     cl->dev[dev].lostevents = 0;
+    cl->dev[dev].totalevents = 0;
+    cl->dev[dev].totalsuccess = 0;
+    cl->dev[dev].totallost = 0;
     cl->dev[dev].summary=CL_COMPLETE;
     cl->dev[dev].used_global_mem = 0;
     cl->dev[dev].nvidia_sm_20 = 0;
     cl->dev[dev].vendor = "";
+    cl->dev[dev].name = "";
     cl_device_id devid = cl->dev[dev].devid = devices[k];
 
     char infostr[1024];
@@ -206,6 +210,7 @@ void dt_opencl_init(dt_opencl_t *cl, const int argc, char *argv[])
     }
 
     cl->dev[dev].vendor = dt_opencl_get_vendor_by_id(vendor_id);
+    cl->dev[dev].name = strdup(infostr);
 
     dt_print(DT_DEBUG_OPENCL, "[opencl_init] device %d `%s' supports image sizes of %zd x %zd\n", k, infostr, cl->dev[dev].max_image_width, cl->dev[dev].max_image_height);
     dt_print(DT_DEBUG_OPENCL, "[opencl_init] device %d `%s' allows GPU memory allocations of up to %luMB\n", k, infostr, cl->dev[dev].max_mem_alloc/1024/1024);
@@ -263,6 +268,9 @@ void dt_opencl_init(dt_opencl_t *cl, const int argc, char *argv[])
     char binname[DT_MAX_PATH_LEN];
     dt_loc_get_datadir(dtpath, DT_MAX_PATH_LEN);
     snprintf(filename, DT_MAX_PATH_LEN, "%s/kernels/programs.conf", dtpath);
+    char kerneldir[DT_MAX_PATH_LEN];
+    snprintf(kerneldir, DT_MAX_PATH_LEN, "%s/kernels", dtpath);
+
 
     // now load all darktable cl kernels.
     // TODO: compile as a job?
@@ -310,7 +318,7 @@ void dt_opencl_init(dt_opencl_t *cl, const int argc, char *argv[])
         int loaded_cached;
         char md5sum[33];
         if(dt_opencl_load_program(dev, prog, filename, binname, cachedir, md5sum, &loaded_cached) && 
-           dt_opencl_build_program(dev, prog, binname, cachedir, md5sum, loaded_cached) != CL_SUCCESS)
+           dt_opencl_build_program(dev, prog, binname, cachedir, md5sum, loaded_cached, kerneldir) != CL_SUCCESS)
         {
           dt_print(DT_DEBUG_OPENCL, "[opencl_init] failed to compile program `%s'!\n", programname);
           goto finally;
@@ -368,9 +376,22 @@ void dt_opencl_cleanup(dt_opencl_t *cl)
       for(int k=0; k<DT_OPENCL_MAX_PROGRAMS; k++) if(cl->dev[i].program_used[k]) (cl->dlocl->symbols->dt_clReleaseProgram)(cl->dev[i].program[k]);
       (cl->dlocl->symbols->dt_clReleaseCommandQueue)(cl->dev[i].cmd_queue);
       (cl->dlocl->symbols->dt_clReleaseContext)(cl->dev[i].context);
-      dt_opencl_events_reset(i);
-      if(cl->dev[i].eventlist) free(cl->dev[i].eventlist);
-      if(cl->dev[i].eventtags) free(cl->dev[i].eventtags);
+      if(cl->use_events)
+      {
+        if(cl->dev[i].totalevents)
+        {
+          dt_print(DT_DEBUG_OPENCL, "[opencl_summary_statistics] device '%s': %d out of %d events were successful and %d events lost\n", cl->dev[i].name,
+                                 cl->dev[i].totalsuccess, cl->dev[i].totalevents, cl->dev[i].totallost);
+        }
+        else
+        {
+          dt_print(DT_DEBUG_OPENCL, "[opencl_summary_statistics] device '%s': NOT utilized\n", cl->dev[i].name);
+        }
+        dt_opencl_events_reset(i);
+
+        if(cl->dev[i].eventlist) free(cl->dev[i].eventlist);
+        if(cl->dev[i].eventtags) free(cl->dev[i].eventtags);
+      }
     }
   }
 
@@ -604,40 +625,42 @@ int dt_opencl_load_program(const int dev, const int prog, const char *filename, 
 
 }
 
-int dt_opencl_build_program(const int dev, const int prog, const char* binname, const char* cachedir, char* md5sum, int loaded_cached)
+int dt_opencl_build_program(const int dev, const int prog, const char* binname, const char* cachedir, char* md5sum, int loaded_cached, const char* kerneldir)
 {
   if(prog < 0 || prog >= DT_OPENCL_MAX_PROGRAMS) return -1;
   dt_opencl_t *cl = darktable.opencl;
   cl_program program = cl->dev[dev].program[prog];
   cl_int err;
-  char options[256];
-  snprintf(options, 256, "-cl-fast-relaxed-math -cl-strict-aliasing%s -D%s=1", cl->dev[dev].nvidia_sm_20 ? " -DNVIDIA_SM_20=1" : "", cl->dev[dev].vendor);
+  char options[1024];
+  snprintf(options, 1024, "-cl-fast-relaxed-math -cl-strict-aliasing %s -D%s=1 -I%s", (cl->dev[dev].nvidia_sm_20 ? " -DNVIDIA_SM_20=1" : ""), cl->dev[dev].vendor, kerneldir);
   err = (cl->dlocl->symbols->dt_clBuildProgram)(program, 1, &cl->dev[dev].devid, options, 0, 0);
+
   if(err != CL_SUCCESS)
-  {
     dt_print(DT_DEBUG_OPENCL, "[opencl_build_program] could not build program: %d\n", err);
-    cl_build_status build_status;
-    (cl->dlocl->symbols->dt_clGetProgramBuildInfo)(program, cl->dev[dev].devid, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &build_status, NULL);
-    if (build_status != CL_BUILD_SUCCESS)
-    {
-      char *build_log;
-      size_t ret_val_size;
-      (cl->dlocl->symbols->dt_clGetProgramBuildInfo)(program, cl->dev[dev].devid, CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
-      build_log = (char *)malloc(sizeof(char)*(ret_val_size+1));
-      (cl->dlocl->symbols->dt_clGetProgramBuildInfo)(program, cl->dev[dev].devid, CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
+  else
+    dt_print(DT_DEBUG_OPENCL, "[opencl_build_program] successfully built program\n");
 
-      build_log[ret_val_size] = '\0';
+  cl_build_status build_status;
+  (cl->dlocl->symbols->dt_clGetProgramBuildInfo)(program, cl->dev[dev].devid, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &build_status, NULL);
+  dt_print(DT_DEBUG_OPENCL, "[opencl_build_program] BUILD STATUS: %d\n", build_status);
 
-      dt_print(DT_DEBUG_OPENCL, "BUILD LOG:\n");
-      dt_print(DT_DEBUG_OPENCL, "%s\n", build_log);
+  char *build_log;
+  size_t ret_val_size;
+  (cl->dlocl->symbols->dt_clGetProgramBuildInfo)(program, cl->dev[dev].devid, CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
+  build_log = (char *)malloc(sizeof(char)*(ret_val_size+1));
+  (cl->dlocl->symbols->dt_clGetProgramBuildInfo)(program, cl->dev[dev].devid, CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
 
-      free(build_log);
-    }
+  build_log[ret_val_size] = '\0';
+
+  dt_print(DT_DEBUG_OPENCL, "BUILD LOG:\n");
+  dt_print(DT_DEBUG_OPENCL, "%s\n", build_log);
+
+  free(build_log);
+
+  if(err != CL_SUCCESS)
     return err;
-  }
   else
   {
-    dt_print(DT_DEBUG_OPENCL, "[opencl_build_program] successfully built program\n");
     if (!loaded_cached)
     {
       dt_print(DT_DEBUG_OPENCL, "[opencl_build_program] saving binary\n");
@@ -1186,6 +1209,8 @@ cl_event *dt_opencl_events_get_slot(const int devid, const char *tag)
   int *numevents = &(cl->dev[devid].numevents);
   int *maxevents = &(cl->dev[devid].maxevents);
   int *lostevents = &(cl->dev[devid].lostevents);
+  int *totalevents = &(cl->dev[devid].totalevents);
+  int *totallost = &(cl->dev[devid].totallost);
 
   // if first time called: allocate initial buffers
   if (*eventlist == NULL)
@@ -1209,6 +1234,7 @@ cl_event *dt_opencl_events_get_slot(const int devid, const char *tag)
   if (*numevents > 0 && !memcmp((*eventlist)+*numevents-1, zeroevent, sizeof(cl_event)))
   {
     (*lostevents)++;
+    (*totallost)++;
     if (tag != NULL)
     {
       strncpy((*eventtags)[*numevents-1].tag, tag, DT_OPENCL_EVENTNAMELENGTH);
@@ -1217,6 +1243,8 @@ cl_event *dt_opencl_events_get_slot(const int devid, const char *tag)
     {
       (*eventtags)[*numevents-1].tag[0]='\0';
     }
+
+    (*totalevents)++;
     return (*eventlist)+*numevents-1;
   }
 
@@ -1253,6 +1281,8 @@ cl_event *dt_opencl_events_get_slot(const int devid, const char *tag)
   {
     (*eventtags)[*numevents-1].tag[0]='\0';
   }
+
+  (*totalevents)++;
   return (*eventlist)+*numevents-1;
 }
 
@@ -1301,6 +1331,7 @@ void dt_opencl_events_wait_for(const int devid)
   cl_event **eventlist = &(cl->dev[devid].eventlist);
   int *numevents = &(cl->dev[devid].numevents);
   int *lostevents = &(cl->dev[devid].lostevents);
+  int *totallost = &(cl->dev[devid].totallost);
   int *eventsconsolidated = &(cl->dev[devid].eventsconsolidated);
 
   if (*eventlist==NULL || *numevents==0) return; // nothing to do
@@ -1310,6 +1341,7 @@ void dt_opencl_events_wait_for(const int devid)
   {
     (*numevents)--;
     (*lostevents)++;
+    (*totallost)++;
   }
 
   if (*numevents == *eventsconsolidated) return; // nothing to do
@@ -1342,6 +1374,8 @@ cl_int dt_opencl_events_flush(const int devid, const int reset)
   int *numevents = &(cl->dev[devid].numevents);
   int *eventsconsolidated = &(cl->dev[devid].eventsconsolidated);
   int *lostevents = &(cl->dev[devid].lostevents);
+  int *totalsuccess = &(cl->dev[devid].totalsuccess);
+
   cl_int *summary = &(cl->dev[devid].summary);
 
   if (*eventlist==NULL || *numevents==0) return CL_COMPLETE; // nothing to do, no news is good news
@@ -1367,6 +1401,8 @@ cl_int dt_opencl_events_flush(const int devid, const int reset)
       dt_print(DT_DEBUG_OPENCL, "[opencl_events_flush] execution of '%s' %s: %d\n", tag[0] == '\0' ? "<?>" : tag, *retval == CL_COMPLETE ? "was successful" : "failed", *retval);
       *summary=*retval;
     }
+    else
+      (*totalsuccess)++;
 
     // get profiling info of event
     cl_ulong start;

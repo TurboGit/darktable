@@ -27,11 +27,15 @@
 #include "common/imageio.h"
 #include "common/imageio_module.h"
 #include "common/imageio_exr.h"
+#ifdef HAVE_OPENJPEG
+#include "common/imageio_j2k.h"
+#endif
 #include "common/imageio_jpeg.h"
 #include "common/imageio_png.h"
 #include "common/imageio_tiff.h"
 #include "common/imageio_pfm.h"
 #include "common/imageio_rgbe.h"
+#include "common/imageio_gm.h"
 #include "common/imageio_rawspeed.h"
 #include "common/image_compression.h"
 #include "common/mipmap_cache.h"
@@ -288,7 +292,6 @@ dt_imageio_open_raw(
   ret = libraw_unpack(raw);
   // img->black   = raw->color.black/65535.0;
   // img->maximum = raw->color.maximum/65535.0;
-  img->bpp = sizeof(uint16_t);
   // printf("black, max: %d %d %f %f\n", raw->color.black, raw->color.maximum, img->black, img->maximum);
   HANDLE_ERRORS(ret, 1);
   ret = libraw_dcraw_process(raw);
@@ -302,6 +305,7 @@ dt_imageio_open_raw(
     img->orientation = raw->sizes.flip;
   // filters seem only ever to take a useful value after unpack/process
   img->filters = raw->idata.filters;
+  img->bpp = img->filters ? sizeof(uint16_t) : 4*sizeof(float);
   img->width  = (img->orientation & 4) ? raw->sizes.height : raw->sizes.width;
   img->height = (img->orientation & 4) ? raw->sizes.width  : raw->sizes.height;
   img->exif_iso = raw->other.iso_speed;
@@ -322,11 +326,14 @@ dt_imageio_open_raw(
     free(image);
     return DT_IMAGEIO_CACHE_FULL;
   }
+  if(img->filters)
+  {
 #ifdef _OPENMP
   #pragma omp parallel for schedule(static) default(none) shared(img, image, raw, buf)
 #endif
-  for(int k=0; k<img->width*img->height; k++)
-    ((uint16_t *)buf)[k] = CLAMPS((((uint16_t *)image->data)[k] - raw->color.black)*65535.0f/(float)(raw->color.maximum - raw->color.black), 0, 0xffff);
+    for(int k=0; k<img->width*img->height; k++)
+      ((uint16_t *)buf)[k] = CLAMPS((((uint16_t *)image->data)[k] - raw->color.black)*65535.0f/(float)(raw->color.maximum - raw->color.black), 0, 0xffff);
+  }
   // clean up raw stuff.
   libraw_recycle(raw);
   libraw_close(raw);
@@ -334,9 +341,19 @@ dt_imageio_open_raw(
   raw = NULL;
   image = NULL;
 
-  img->flags &= ~DT_IMAGE_LDR;
-  img->flags &= ~DT_IMAGE_HDR;
-  img->flags |= DT_IMAGE_RAW;
+  if(img->filters)
+  {
+    img->flags &= ~DT_IMAGE_LDR;
+    img->flags &= ~DT_IMAGE_HDR;
+    img->flags |= DT_IMAGE_RAW;
+  }
+  else
+  {
+    // ldr dng. it exists :(
+    img->flags &= ~DT_IMAGE_RAW;
+    img->flags &= ~DT_IMAGE_HDR;
+    img->flags |= DT_IMAGE_LDR;
+  }
   return DT_IMAGEIO_OK;
 }
 
@@ -349,6 +366,14 @@ static const uint8_t _imageio_ldr_magic[] =
   /* jpeg magics */
   0x00, 0x00, 0x02, 0xff, 0xd8,                         // SOI marker
 
+#ifdef HAVE_OPENJPEG
+  /* jpeg 2000, jp2 format */
+  0x00, 0x00, 0x0c, 0x0, 0x0, 0x0, 0x0C, 0x6A, 0x50, 0x20, 0x20, 0x0D, 0x0A, 0x87, 0x0A,
+
+  /* jpeg 2000, j2k format */
+  0x00, 0x00, 0x05, 0xFF, 0x4F, 0xFF, 0x51, 0x00,
+#endif
+
   /* png image */
   0x00, 0x01, 0x03, 0x50, 0x4E, 0x47,                   // ASCII 'PNG'
 
@@ -356,7 +381,7 @@ static const uint8_t _imageio_ldr_magic[] =
   0x01, 0x00, 0x0a, 0x49, 0x49, 0x2a, 0x00, 0x10, 0x00, 0x00, 0x00, 0x43, 0x52,  // Canon CR2 is like TIFF with aditional magic number. must come before tiff as an exclusion
 
   /* tiff image, intel */
-  0x00, 0x00, 0x04, 0x4d, 0x4d, 0x00, 0x2a, 
+  0x00, 0x00, 0x04, 0x4d, 0x4d, 0x00, 0x2a,
 
   /* tiff image, motorola */
   0x00, 0x00, 0x04, 0x49, 0x49, 0x2a, 0x00
@@ -421,6 +446,18 @@ dt_imageio_open_ldr(
     return ret;
   }
 
+#ifdef HAVE_OPENJPEG
+  ret = dt_imageio_open_j2k(img, filename, a);
+  if(ret == DT_IMAGEIO_OK || ret == DT_IMAGEIO_CACHE_FULL)
+  {
+    img->filters = 0;
+    img->flags &= ~DT_IMAGE_RAW;
+    img->flags &= ~DT_IMAGE_HDR;
+    img->flags |= DT_IMAGE_LDR;
+    return ret;
+  }
+#endif
+
   ret = dt_imageio_open_jpeg(img, filename, a);
   if(ret == DT_IMAGEIO_OK || ret == DT_IMAGEIO_CACHE_FULL)
   {
@@ -462,7 +499,7 @@ int dt_imageio_export(
     return format->write_image(format_params, filename, NULL, NULL, 0, imgid);
   else
     return dt_imageio_export_with_flags(imgid, filename, format, format_params,
-                                        0, 0, high_quality, 0);
+                                        0, 0, high_quality, 0, NULL);
 }
 
 // internal function: to avoid exif blob reading + 8-bit byteorder flag + high-quality override
@@ -474,7 +511,8 @@ int dt_imageio_export_with_flags(
   const int32_t               ignore_exif,
   const int32_t               display_byteorder,
   const gboolean              high_quality,
-  const int32_t               thumbnail_export)
+  const int32_t               thumbnail_export,
+  const char                 *filter)
 {
   dt_develop_t dev;
   dt_dev_init(&dev, 0);
@@ -495,14 +533,14 @@ int dt_imageio_export_with_flags(
   {
     dt_control_log(_("failed to allocate memory for export, please lower the threads used for export or buy more memory."));
     dt_dev_cleanup(&dev);
-    if(buf.buf)
-      dt_mipmap_cache_read_release(darktable.mipmap_cache, &buf);
+    dt_mipmap_cache_read_release(darktable.mipmap_cache, &buf);
     return 1;
   }
 
   if(!buf.buf)
   {
     dt_control_log(_("image `%s' is not available!"), img->filename);
+    dt_mipmap_cache_read_release(darktable.mipmap_cache, &buf);
     dt_dev_cleanup(&dev);
     return 1;
   }
@@ -511,6 +549,13 @@ int dt_imageio_export_with_flags(
   dt_dev_pixelpipe_create_nodes(&pipe, &dev);
   dt_dev_pixelpipe_synch_all(&pipe, &dev);
   dt_dev_pixelpipe_get_dimensions(&pipe, &dev, pipe.iwidth, pipe.iheight, &pipe.processed_width, &pipe.processed_height);
+  if(filter)
+  {
+    if(!strncmp(filter, "pre:", 4))
+      dt_dev_pixelpipe_disable_after(&pipe, filter+4);
+    if(!strncmp(filter, "post:", 5))
+      dt_dev_pixelpipe_disable_before(&pipe, filter+5);
+  }
   dt_show_times(&start, "[export] creating pixelpipe", NULL);
 
   // find output color profile for this image:
@@ -705,6 +750,10 @@ dt_imageio_open(
   if(ret != DT_IMAGEIO_OK && ret != DT_IMAGEIO_CACHE_FULL)
     ret = dt_imageio_open_hdr(img, filename, a);
   if(ret != DT_IMAGEIO_OK && ret != DT_IMAGEIO_CACHE_FULL)      // failsafing, if ldr magic test fails..
+#ifdef HAVE_GRAPHICSMAGICK
+    ret = dt_imageio_open_gm(img, filename, a);
+  if(ret != DT_IMAGEIO_OK && ret != DT_IMAGEIO_CACHE_FULL)
+#endif
     ret = dt_imageio_open_ldr(img, filename, a);
 
   img->flags &= ~DT_IMAGE_THUMBNAIL;
