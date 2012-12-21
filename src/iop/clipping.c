@@ -325,12 +325,26 @@ transform(float *x, float *o, const float *m, const float t_h, const float t_v)
 int distort_transform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, float *points, int points_count)
 {
   if (!self->enabled) return 2;
-dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
+  dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
+  
+  const float rx = piece->buf_in.width;
+  const float ry = piece->buf_in.height;
+  float k_space[4] = {d->k_space[0]*rx,d->k_space[1]*ry,d->k_space[2]*rx,d->k_space[3]*ry};
+  const float kxa = d->kxa*rx, kxb = d->kxb*rx, kxc = d->kxc*rx, kxd = d->kxd*rx;
+  const float kya = d->kya*ry, kyb = d->kyb*ry, kyc = d->kyc*ry, kyd = d->kyd*ry;
+  float ma,mb,md,me,mg,mh;
+  keystone_get_matrix(k_space,kxa,kxb,kxc,kxd,kya,kyb,kyc,kyd,&ma,&mb,&md,&me,&mg,&mh);  
+  
   for (int i=0; i<points_count*2; i+=2)
   {
     float pi[2], po[2];
-    pi[0] = points[i] - d->tx + .5;
-    pi[1] = points[i+1] - d->ty + .5;
+    pi[0] = points[i] + .5; // - d->tx + .5;
+    pi[1] = points[i+1] + .5; // - d->ty + .5;
+    
+    if (d->k_apply==1) keystone_transform(pi,k_space,ma,mb,md,me,mg,mh,kxa,kya);
+    
+    pi[0] -= d->tx;
+    pi[1] -= d->ty;
     // transform this point using matrix m
     transform(pi, po, d->m, d->k_h, d->k_v);
     
@@ -345,8 +359,8 @@ dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
       po[1] += d->ty;
     }
 
-    points[i] = po[0] - d->cix;
-    points[i+1] = po[1] - d->ciy;
+    points[i] = po[0] - d->cix + d->enlarge_x;
+    points[i+1] = po[1] - d->ciy + d->enlarge_y;
   }
   
   return 1;
@@ -354,12 +368,21 @@ dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
 int distort_backtransform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, float *points, int points_count)
 {
   if (!self->enabled) return 2;
-dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
+  dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
+
+  const float rx = piece->buf_in.width;
+  const float ry = piece->buf_in.height;
+  float k_space[4] = {d->k_space[0]*rx,d->k_space[1]*ry,d->k_space[2]*rx,d->k_space[3]*ry};
+  const float kxa = d->kxa*rx, kxb = d->kxb*rx, kxc = d->kxc*rx, kxd = d->kxd*rx;
+  const float kya = d->kya*ry, kyb = d->kyb*ry, kyc = d->kyc*ry, kyd = d->kyd*ry;
+  float ma,mb,md,me,mg,mh;
+  keystone_get_matrix(k_space,kxa,kxb,kxc,kxd,kya,kyb,kyc,kyd,&ma,&mb,&md,&me,&mg,&mh);
+
   for (int i=0; i<points_count*2; i+=2)
   {
     float pi[2], po[2];
-    pi[0] = d->cix + points[i] + .5;
-    pi[1] = d->ciy + points[i+1] + .5;
+    pi[0] = -d->enlarge_x + d->cix + points[i] + .5;
+    pi[1] = -d->enlarge_y + d->ciy + points[i+1] + .5;
     // transform this point using matrix m
     if(d->flip)
     {
@@ -373,9 +396,12 @@ dt_iop_clipping_data_t *d = (dt_iop_clipping_data_t *)piece->data;
     }
 
     backtransform(pi, po, d->m, d->k_h, d->k_v);
-
-    points[i] = po[0] + d->tx;
-    points[i+1] = po[1] + d->ty;
+    po[0] += d->tx;
+    po[1] += d->ty;
+    if (d->k_apply==1) keystone_backtransform(po,k_space,ma,mb,md,me,mg,mh,kxa,kya);
+        
+    points[i] = po[0];
+    points[i+1] = po[1];
   }
   
   return 1;
