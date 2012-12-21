@@ -20,6 +20,7 @@
 #endif
 #include "develop/imageop.h"
 #include "control/control.h"
+#include "control/conf.h"
 #include "gui/gtk.h"
 #include <gtk/gtk.h>
 #include <stdlib.h>
@@ -67,7 +68,7 @@ typedef struct dt_iop_spots_gui_data_t
   int dragging;
   int selected;
   gboolean hoover_c; // is the pointer over the "clone from" end?
-  
+  float last_radius;
   spot_draw_t spot[32];
   int image_id;
 }
@@ -355,6 +356,8 @@ void gui_init     (dt_iop_module_t *self)
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   g->dragging = -1;
   g->selected = -1;
+  g->last_radius = MAX(0.01f, dt_conf_get_float("ui_last/spot_size"));
+
   for (int i=0; i<32; i++)
   {
     g->spot[i].ok = 0;
@@ -609,9 +612,11 @@ int scrolled(dt_iop_module_t *self, double x, double y, int up, uint32_t state)
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   if(g->selected >= 0)
   {
-    if(up && p->spot[g->selected].radius > 0.005f) p->spot[g->selected].radius *= 0.9f;
+    if(up && p->spot[g->selected].radius > 0.002f) p->spot[g->selected].radius *= 0.9f;
     else  if(p->spot[g->selected].radius < 0.1f  ) p->spot[g->selected].radius *= 1.0f/0.9f;
     gui_spot_update_radius(self,&g->spot[g->selected],g->selected);
+    g->last_radius = p->spot[g->selected].radius;
+    dt_conf_set_float("ui_last/spot_size", g->last_radius);
     dt_dev_add_history_item(darktable.develop, self, TRUE);
     return 1;
   }
@@ -642,11 +647,11 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
       // on *wd|*ht scale, radius on *min(wd, ht).
       float wd = self->dev->preview_pipe->backbuf_width;
       float ht = self->dev->preview_pipe->backbuf_height;
+      p->spot[i].radius = g->last_radius;
       float pts[2] = {pzx*wd,pzy*ht};
       dt_dev_distort_backtransform(self->dev,pts,1);
       p->spot[i].x = p->spot[i].xc = pts[0]/self->dev->preview_pipe->iwidth;
       p->spot[i].y = p->spot[i].yc = pts[1]/self->dev->preview_pipe->iheight;
-      p->spot[i].radius = 0.01f;
       gui_spot_add(self,&g->spot[i],i);
       g->selected = i;
       g->hoover_c = TRUE;
