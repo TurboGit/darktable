@@ -1043,8 +1043,8 @@ void commit_params (struct dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pi
     d->all_off = 1;
     d->k_apply = 0;
     //we are setting the keystone points, so we disable flip and rotate
-    d->angle = 0.0f;
-    d->flags = 0;
+    //d->angle = 0.0f;
+    //d->flags = 0;
   }
   
   
@@ -1968,199 +1968,200 @@ void gui_post_expose(struct dt_iop_module_t *self, cairo_t *cr, int32_t width, i
   if (g->k_show == 1 && p->k_type > 0)
   {
     //points in screen space
-    float p1[2] = {p->kxa*wd,p->kya*ht};
-    float p2[2] = {p->kxb*wd,p->kyb*ht};
-    float p3[2] = {p->kxc*wd,p->kyc*ht};
-    float p4[2] = {p->kxd*wd,p->kyd*ht};
-
-    if (p->k_type == 3)
+    float iwd = dev->preview_pipe->iwidth;
+    float iht = dev->preview_pipe->iheight;
+    float pts[8] = {p->kxa*iwd, p->kya*iht, p->kxb*iwd, p->kyb*iht, p->kxc*iwd, p->kyc*iht, p->kxd*iwd, p->kyd*iht};
+    if (dt_dev_distort_transform(self->dev,pts,4))
     {
-      //determine extremity of the lines
-      int v1t = p1[0] - (p4[0]-p1[0]) * p1[1] / (float)(p4[1]-p1[1]);
-      int v1b = (p4[0]-p1[0]) * ht / (float)(p4[1]-p1[1]) + v1t;
-      int v2t = p2[0] - (p3[0]-p2[0]) * p2[1] / (float)(p3[1]-p2[1]);
-      int v2b = (p3[0]-p2[0]) * ht / (float)(p3[1]-p2[1]) + v2t;
-      int h1l = p1[1] - (p2[1]-p1[1]) * p1[0] / (float)(p2[0]-p1[0]);
-      int h1r = (p2[1]-p1[1]) * wd / (float)(p2[0]-p1[0]) + h1l;
-      int h2l = p4[1] - (p3[1]-p4[1]) * p4[0] / (float)(p3[0]-p4[0]);
-      int h2r = (p3[1]-p4[1]) * wd / (float)(p3[0]-p4[0]) + h2l;
+      if (p->k_type == 3)
+      {
+        //determine extremity of the lines
+        int v1t = pts[0] - (pts[6]-pts[0]) * pts[1] / (float)(pts[7]-pts[1]);
+        int v1b = (pts[6]-pts[0]) * ht / (float)(pts[7]-pts[1]) + v1t;
+        int v2t = pts[2] - (pts[4]-pts[2]) * pts[3] / (float)(pts[5]-pts[3]);
+        int v2b = (pts[4]-pts[2]) * ht / (float)(pts[5]-pts[3]) + v2t;
+        int h1l = pts[1] - (pts[3]-pts[1]) * pts[0] / (float)(pts[2]-pts[0]);
+        int h1r = (pts[3]-pts[1]) * wd / (float)(pts[2]-pts[0]) + h1l;
+        int h2l = pts[7] - (pts[5]-pts[7]) * pts[6] / (float)(pts[4]-pts[6]);
+        int h2r = (pts[5]-pts[7]) * wd / (float)(pts[4]-pts[6]) + h2l;
+        
+        //draw the lines
+        cairo_move_to(cr,v1t,0);
+        cairo_line_to(cr,v1b,ht);
+        cairo_stroke(cr);
+        cairo_move_to(cr,v2t,0);
+        cairo_line_to(cr,v2b,ht);
+        cairo_stroke(cr);
+        cairo_move_to(cr,0,h1l);
+        cairo_line_to(cr,wd,h1r);
+        cairo_stroke(cr);
+        cairo_move_to(cr,0,h2l);
+        cairo_line_to(cr,wd,h2r);
+        cairo_stroke(cr);
+        //redraw selected one
+        cairo_set_line_width(cr, 4.0/zoom_scale);
+        if (g->k_selected_segment == 0)
+        {
+          cairo_move_to(cr,pts[0],pts[1]);
+          cairo_line_to(cr,pts[2],pts[3]);
+          cairo_stroke(cr);
+        }
+        else if (g->k_selected_segment == 1)
+        {
+          cairo_move_to(cr,pts[4],pts[5]);
+          cairo_line_to(cr,pts[2],pts[3]);
+          cairo_stroke(cr);
+        }
+        else if (g->k_selected_segment == 2)
+        {
+          cairo_move_to(cr,pts[4],pts[5]);
+          cairo_line_to(cr,pts[6],pts[7]);
+          cairo_stroke(cr);
+        }
+        else if (g->k_selected_segment == 3)
+        {
+          cairo_move_to(cr,pts[0],pts[1]);
+          cairo_line_to(cr,pts[6],pts[7]);
+          cairo_stroke(cr);
+        }
+      }
+      else if (p->k_type == 2)
+      {
+        //determine extremity of the lines
+        int h1l = pts[1] - (pts[3]-pts[1]) * pts[0] / (float)(pts[2]-pts[0]);
+        int h1r = (pts[3]-pts[1]) * wd / (float)(pts[2]-pts[0]) + h1l;
+        int h2l = pts[7] - (pts[5]-pts[7]) * pts[6] / (float)(pts[4]-pts[6]);
+        int h2r = (pts[5]-pts[7]) * wd / (float)(pts[4]-pts[6]) + h2l;
+        
+        //draw the lines
+        cairo_move_to(cr,0,h1l);
+        cairo_line_to(cr,wd,h1r);
+        cairo_stroke(cr);
+        cairo_move_to(cr,0,h2l);
+        cairo_line_to(cr,wd,h2r);
+        cairo_stroke(cr);
+        //redraw selected one
+        cairo_set_line_width(cr, 4.0/zoom_scale);
+        if (g->k_selected_segment == 1)
+        {
+          cairo_move_to(cr,pts[4],pts[5]);
+          cairo_line_to(cr,pts[2],pts[3]);
+          cairo_stroke(cr);
+        }
+        else if (g->k_selected_segment == 3)
+        {
+          cairo_move_to(cr,pts[0],pts[1]);
+          cairo_line_to(cr,pts[6],pts[7]);
+          cairo_stroke(cr);
+        }
+      }
+      else if (p->k_type == 1)
+      {
+        //determine extremity of the lines
+        int v1t = pts[0] - (pts[6]-pts[0]) * pts[1] / (float)(pts[7]-pts[1]);
+        int v1b = (pts[6]-pts[0]) * ht / (float)(pts[7]-pts[1]) + v1t;
+        int v2t = pts[2] - (pts[4]-pts[2]) * pts[3] / (float)(pts[5]-pts[3]);
+        int v2b = (pts[4]-pts[2]) * ht / (float)(pts[5]-pts[3]) + v2t;
+        
+        //draw the lines
+        cairo_move_to(cr,v1t,0);
+        cairo_line_to(cr,v1b,ht);
+        cairo_stroke(cr);
+        cairo_move_to(cr,v2t,0);
+        cairo_line_to(cr,v2b,ht);
+        cairo_stroke(cr);
+        //redraw selected one
+        cairo_set_line_width(cr, 4.0/zoom_scale);
+        if (g->k_selected_segment == 0)
+        {
+          cairo_move_to(cr,pts[0],pts[1]);
+          cairo_line_to(cr,pts[2],pts[3]);
+          cairo_stroke(cr);
+        }
+        else if (g->k_selected_segment == 2)
+        {
+          cairo_move_to(cr,pts[4],pts[5]);
+          cairo_line_to(cr,pts[6],pts[7]);
+          cairo_stroke(cr);
+        }
+      }
+        
+      //draw the points
+      if (g->k_selected == 0) //point 1
+      {
+        cairo_set_line_width(cr, 4.0/zoom_scale);
+        cairo_set_source_rgba(cr, 1.0, 0, 0, .8);
+      }
+      else
+      {
+        cairo_set_line_width(cr, 2.0/zoom_scale);
+        cairo_set_source_rgba(cr, 1.0, 0, 0, .5);
+      }
+      cairo_arc (cr, pts[0], pts[1], 5.0/zoom_scale, 0, 2.0*M_PI);
+      cairo_stroke (cr);
+      if (g->k_selected == 1) //point 2
+      {
+        cairo_set_line_width(cr, 4.0/zoom_scale);
+        cairo_set_source_rgba(cr, 1.0, 0, 0, .8);
+      }
+      else
+      {
+        cairo_set_line_width(cr, 2.0/zoom_scale);
+        cairo_set_source_rgba(cr, 1.0, 0, 0, .5);
+      }
+      cairo_arc (cr, pts[2], pts[3], 5.0/zoom_scale, 0, 2.0*M_PI);
+      cairo_stroke (cr);
+      if (g->k_selected == 2) //point 3
+      {
+        cairo_set_line_width(cr, 4.0/zoom_scale);
+        cairo_set_source_rgba(cr, 1.0, 0, 0, .8);
+      }
+      else
+      {
+        cairo_set_line_width(cr, 2.0/zoom_scale);
+        cairo_set_source_rgba(cr, 1.0, 0, 0, .5);
+      }
+      cairo_arc (cr, pts[4], pts[5], 5.0/zoom_scale, 0, 2.0*M_PI);
+      cairo_stroke (cr);
+      if (g->k_selected == 3) //point 4
+      {
+        cairo_set_line_width(cr, 4.0/zoom_scale);
+        cairo_set_source_rgba(cr, 1.0, 0, 0, .8);
+      }
+      else
+      {
+        cairo_set_line_width(cr, 2.0/zoom_scale);
+        cairo_set_source_rgba(cr, 1.0, 0, 0, .5);
+      }
+      cairo_arc (cr, pts[6], pts[7], 5.0/zoom_scale, 0, 2.0*M_PI);
+      cairo_stroke (cr);
       
-      //draw the lines
-      cairo_move_to(cr,v1t,0);
-      cairo_line_to(cr,v1b,ht);
-      cairo_stroke(cr);
-      cairo_move_to(cr,v2t,0);
-      cairo_line_to(cr,v2b,ht);
-      cairo_stroke(cr);
-      cairo_move_to(cr,0,h1l);
-      cairo_line_to(cr,wd,h1r);
-      cairo_stroke(cr);
-      cairo_move_to(cr,0,h2l);
-      cairo_line_to(cr,wd,h2r);
-      cairo_stroke(cr);
-      //redraw selected one
-      cairo_set_line_width(cr, 4.0/zoom_scale);
-      if (g->k_selected_segment == 0)
-      {
-        cairo_move_to(cr,p->kxa*wd,p->kya*ht);
-        cairo_line_to(cr,p->kxb*wd,p->kyb*ht);
-        cairo_stroke(cr);
-      }
-      else if (g->k_selected_segment == 1)
-      {
-        cairo_move_to(cr,p->kxc*wd,p->kyc*ht);
-        cairo_line_to(cr,p->kxb*wd,p->kyb*ht);
-        cairo_stroke(cr);
-      }
-      else if (g->k_selected_segment == 2)
-      {
-        cairo_move_to(cr,p->kxc*wd,p->kyc*ht);
-        cairo_line_to(cr,p->kxd*wd,p->kyd*ht);
-        cairo_stroke(cr);
-      }
-      else if (g->k_selected_segment == 3)
-      {
-        cairo_move_to(cr,p->kxa*wd,p->kya*ht);
-        cairo_line_to(cr,p->kxd*wd,p->kyd*ht);
-        cairo_stroke(cr);
-      }
-    }
-    else if (p->k_type == 2)
-    {
-      //determine extremity of the lines
-      int h1l = p1[1] - (p2[1]-p1[1]) * p1[0] / (float)(p2[0]-p1[0]);
-      int h1r = (p2[1]-p1[1]) * wd / (float)(p2[0]-p1[0]) + h1l;
-      int h2l = p4[1] - (p3[1]-p4[1]) * p4[0] / (float)(p3[0]-p4[0]);
-      int h2r = (p3[1]-p4[1]) * wd / (float)(p3[0]-p4[0]) + h2l;
+      //draw the apply "button"
+      cairo_text_extents_t extents;
+      cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+      cairo_set_font_size(cr, 16);
+      cairo_text_extents (cr, "ok", &extents);
+      int c[2] = {(MIN(pts[4],pts[2])+MAX(pts[0],pts[6]))/2.0f, (MIN(pts[5],pts[7])+MAX(pts[1],pts[3]))/2.0f};
+      cairo_set_source_rgba(cr, .5,.5,.5, .9);
+      gui_draw_rounded_rectangle(cr,extents.width+8,extents.height+12,c[0]-extents.width/2.0f-4,c[1]-extents.height/2.0f-6);
+      cairo_move_to(cr,c[0]-extents.width/2.0f,c[1]+extents.height/2.0f);
+      cairo_set_source_rgba(cr, .2,.2,.2, .9);
+      cairo_show_text(cr, "ok");
       
-      //draw the lines
-      cairo_move_to(cr,0,h1l);
-      cairo_line_to(cr,wd,h1r);
-      cairo_stroke(cr);
-      cairo_move_to(cr,0,h2l);
-      cairo_line_to(cr,wd,h2r);
-      cairo_stroke(cr);
-      //redraw selected one
-      cairo_set_line_width(cr, 4.0/zoom_scale);
-      if (g->k_selected_segment == 1)
+      //draw the symetry buttons
+      gboolean sym = FALSE;
+      if (p->k_type == 1 || p->k_type == 3)
       {
-        cairo_move_to(cr,p->kxc*wd,p->kyc*ht);
-        cairo_line_to(cr,p->kxb*wd,p->kyb*ht);
-        cairo_stroke(cr);
+        if (p->k_sym == 1 || p->k_sym == 3) sym = TRUE;
+        gui_draw_sym(cr,(pts[0]+pts[6])/2.0f,(pts[1]+pts[7])/2.0f,sym);
+        gui_draw_sym(cr,(pts[2]+pts[4])/2.0f,(pts[3]+pts[5])/2.0f,sym);
       }
-      else if (g->k_selected_segment == 3)
+      if (p->k_type == 2 || p->k_type == 3)
       {
-        cairo_move_to(cr,p->kxa*wd,p->kya*ht);
-        cairo_line_to(cr,p->kxd*wd,p->kyd*ht);
-        cairo_stroke(cr);
+        sym = (p->k_sym >=2);
+        gui_draw_sym(cr,(pts[0]+pts[2])/2.0f,(pts[1]+pts[3])/2.0f,sym);
+        gui_draw_sym(cr,(pts[6]+pts[4])/2.0f,(pts[7]+pts[5])/2.0f,sym);
       }
-    }
-    else if (p->k_type == 1)
-    {
-      //determine extremity of the lines
-      int v1t = p1[0] - (p4[0]-p1[0]) * p1[1] / (float)(p4[1]-p1[1]);
-      int v1b = (p4[0]-p1[0]) * ht / (float)(p4[1]-p1[1]) + v1t;
-      int v2t = p2[0] - (p3[0]-p2[0]) * p2[1] / (float)(p3[1]-p2[1]);
-      int v2b = (p3[0]-p2[0]) * ht / (float)(p3[1]-p2[1]) + v2t;
-      
-      //draw the lines
-      cairo_move_to(cr,v1t,0);
-      cairo_line_to(cr,v1b,ht);
-      cairo_stroke(cr);
-      cairo_move_to(cr,v2t,0);
-      cairo_line_to(cr,v2b,ht);
-      cairo_stroke(cr);
-      //redraw selected one
-      cairo_set_line_width(cr, 4.0/zoom_scale);
-      if (g->k_selected_segment == 0)
-      {
-        cairo_move_to(cr,p->kxa*wd,p->kya*ht);
-        cairo_line_to(cr,p->kxb*wd,p->kyb*ht);
-        cairo_stroke(cr);
-      }
-      else if (g->k_selected_segment == 2)
-      {
-        cairo_move_to(cr,p->kxc*wd,p->kyc*ht);
-        cairo_line_to(cr,p->kxd*wd,p->kyd*ht);
-        cairo_stroke(cr);
-      }
-    }
-      
-    //draw the points
-    if (g->k_selected == 0) //point 1
-    {
-      cairo_set_line_width(cr, 4.0/zoom_scale);
-      cairo_set_source_rgba(cr, 1.0, 0, 0, .8);
-    }
-    else
-    {
-      cairo_set_line_width(cr, 2.0/zoom_scale);
-      cairo_set_source_rgba(cr, 1.0, 0, 0, .5);
-    }
-    cairo_arc (cr, p1[0], p1[1], 5.0/zoom_scale, 0, 2.0*M_PI);
-    cairo_stroke (cr);
-    if (g->k_selected == 1) //point 2
-    {
-      cairo_set_line_width(cr, 4.0/zoom_scale);
-      cairo_set_source_rgba(cr, 1.0, 0, 0, .8);
-    }
-    else
-    {
-      cairo_set_line_width(cr, 2.0/zoom_scale);
-      cairo_set_source_rgba(cr, 1.0, 0, 0, .5);
-    }
-    cairo_arc (cr, p2[0], p2[1], 5.0/zoom_scale, 0, 2.0*M_PI);
-    cairo_stroke (cr);
-    if (g->k_selected == 2) //point 3
-    {
-      cairo_set_line_width(cr, 4.0/zoom_scale);
-      cairo_set_source_rgba(cr, 1.0, 0, 0, .8);
-    }
-    else
-    {
-      cairo_set_line_width(cr, 2.0/zoom_scale);
-      cairo_set_source_rgba(cr, 1.0, 0, 0, .5);
-    }
-    cairo_arc (cr, p3[0], p3[1], 5.0/zoom_scale, 0, 2.0*M_PI);
-    cairo_stroke (cr);
-    if (g->k_selected == 3) //point 4
-    {
-      cairo_set_line_width(cr, 4.0/zoom_scale);
-      cairo_set_source_rgba(cr, 1.0, 0, 0, .8);
-    }
-    else
-    {
-      cairo_set_line_width(cr, 2.0/zoom_scale);
-      cairo_set_source_rgba(cr, 1.0, 0, 0, .5);
-    }
-    cairo_arc (cr, p4[0], p4[1], 5.0/zoom_scale, 0, 2.0*M_PI);
-    cairo_stroke (cr);
-    
-    //draw the apply "button"
-    cairo_text_extents_t extents;
-    cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-    cairo_set_font_size(cr, 16);
-    cairo_text_extents (cr, "ok", &extents);
-    int c[2] = {(MIN(p3[0],p2[0])+MAX(p1[0],p4[0]))/2.0f, (MIN(p3[1],p4[1])+MAX(p1[1],p2[1]))/2.0f};
-    cairo_set_source_rgba(cr, .5,.5,.5, .9);
-    gui_draw_rounded_rectangle(cr,extents.width+8,extents.height+12,c[0]-extents.width/2.0f-4,c[1]-extents.height/2.0f-6);
-    cairo_move_to(cr,c[0]-extents.width/2.0f,c[1]+extents.height/2.0f);
-    cairo_set_source_rgba(cr, .2,.2,.2, .9);
-    cairo_show_text(cr, "ok");
-    
-    //draw the symetry buttons
-    gboolean sym = FALSE;
-    if (p->k_type == 1 || p->k_type == 3)
-    {
-      if (p->k_sym == 1 || p->k_sym == 3) sym = TRUE;
-      gui_draw_sym(cr,(p1[0]+p4[0])/2.0f,(p1[1]+p4[1])/2.0f,sym);
-      gui_draw_sym(cr,(p2[0]+p3[0])/2.0f,(p2[1]+p3[1])/2.0f,sym);
-    }
-    if (p->k_type == 2 || p->k_type == 3)
-    {
-      sym = (p->k_sym >=2);
-      gui_draw_sym(cr,(p1[0]+p2[0])/2.0f,(p1[1]+p2[1])/2.0f,sym);
-      gui_draw_sym(cr,(p4[0]+p3[0])/2.0f,(p4[1]+p3[1])/2.0f,sym);
     }
   }
 }
@@ -2217,7 +2218,9 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, int which)
     //case when we drag a point for keystone
     if (g->k_drag == TRUE && g->k_selected >= 0)
     {
-      float xx=pzx, yy=pzy;
+      float pts[2] = {pzx*wd,pzy*ht};
+      dt_dev_distort_backtransform(self->dev,pts,1);
+      float xx=pts[0]/self->dev->preview_pipe->iwidth, yy=pts[1]/self->dev->preview_pipe->iheight;
       if (g->k_selected == 0)
       {
         if (p->k_sym == 1 || p->k_sym == 3) p->kxa = fminf(xx,(p->kxc+p->kxd-0.01f)/2.0f), p->kxb = p->kxc-p->kxa+p->kxd;
@@ -2405,7 +2408,9 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, int which)
     float ext = 0.005f / zoom_scale;
     if (g->k_show == 1 && g->k_drag == FALSE)
     {
-      float xx=pzx, yy=pzy;
+      float pts[2] = {pzx*wd,pzy*ht};
+      dt_dev_distort_backtransform(self->dev,pts,1);
+      float xx=pts[0]/self->dev->preview_pipe->iwidth, yy=pts[1]/self->dev->preview_pipe->iheight;
       //are we near a keystone point ?
       g->k_selected = -1;
       g->k_selected_segment = -1;
@@ -2418,13 +2423,13 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, int which)
       {
         if (p->k_type == 1 || p->k_type == 3)
         {
-          if (dist_seg(p->kxa,p->kya,p->kxb,p->kyb,pzx,pzy) < ext*ext) g->k_selected_segment = 0;
-          else if (dist_seg(p->kxd,p->kyd,p->kxc,p->kyc,pzx,pzy) < ext*ext) g->k_selected_segment = 2;
+          if (dist_seg(p->kxa,p->kya,p->kxb,p->kyb,xx,yy) < ext*ext) g->k_selected_segment = 0;
+          else if (dist_seg(p->kxd,p->kyd,p->kxc,p->kyc,xx,yy) < ext*ext) g->k_selected_segment = 2;
         }
         if (p->k_type == 1 || p->k_type == 3)
         {
-          if (dist_seg(p->kxb,p->kyb,p->kxc,p->kyc,pzx,pzy) < ext*ext) g->k_selected_segment = 1;
-          else if (dist_seg(p->kxd,p->kyd,p->kxa,p->kya,pzx,pzy) < ext*ext) g->k_selected_segment = 3;
+          if (dist_seg(p->kxb,p->kyb,p->kxc,p->kyc,xx,yy) < ext*ext) g->k_selected_segment = 1;
+          else if (dist_seg(p->kxd,p->kyd,p->kxa,p->kya,xx,yy) < ext*ext) g->k_selected_segment = 3;
         }
       }
       if (g->k_selected >=0) dt_control_change_cursor(GDK_CROSS);
@@ -2513,7 +2518,7 @@ int button_pressed(struct dt_iop_module_t *self, double x, double y, int which, 
       else//if we click to the apply button
       {
         int32_t zoom, closeup;
-        float wd = self->dev->preview_pipe->backbuf_width;
+        //float wd = self->dev->preview_pipe->backbuf_width;
         //float ht = self->dev->preview_pipe->backbuf_height;
         DT_CTL_GET_GLOBAL(zoom, dev_zoom);
         DT_CTL_GET_GLOBAL(closeup, dev_closeup);
@@ -2522,11 +2527,20 @@ int button_pressed(struct dt_iop_module_t *self, double x, double y, int which, 
         dt_dev_get_pointer_zoom_pos(self->dev, x, y, &pzx, &pzy);
         pzx += 0.5f;
         pzy += 0.5f;
-        float c[2] = {(MIN(p->kxc,p->kxb)+MAX(p->kxa,p->kxd))/2.0f, (MIN(p->kyc,p->kyd)+MAX(p->kya,p->kyb))/2.0f};
-        float ext = 10.0/(wd*zoom_scale);
-        float xx=pzx, yy=pzy;
+        
+        
+        //float pts[2] = {pzx*self->dev->preview_pipe->backbuf_width,pzy*self->dev->preview_pipe->backbuf_height};
+        //dt_dev_distort_backtransform(self->dev,pts,1);
+        //float xx=pts[0]/self->dev->preview_pipe->iwidth, yy=pts[1]/self->dev->preview_pipe->iheight;
+        float iwd = self->dev->preview_pipe->iwidth;
+        float iht = self->dev->preview_pipe->iheight;
+        float pts[8] = {p->kxa*iwd, p->kya*iht, p->kxb*iwd, p->kyb*iht, p->kxc*iwd, p->kyc*iht, p->kxd*iwd, p->kyd*iht};
+        dt_dev_distort_transform(self->dev,pts,4);
+        float xx=pzx*self->dev->preview_pipe->backbuf_width, yy=pzy*self->dev->preview_pipe->backbuf_height;
+        float c[2] = {(MIN(pts[4],pts[2])+MAX(pts[0],pts[6]))/2.0f, (MIN(pts[5],pts[7])+MAX(pts[1],pts[3]))/2.0f};
+        float ext = 10.0/(zoom_scale);
         //Apply button
-        if (pzx>c[0]-ext && pzx<c[0]+ext && pzy>c[1]-ext && pzy<c[1]+ext)
+        if (xx>c[0]-ext && xx<c[0]+ext && yy>c[1]-ext && yy<c[1]+ext)
         {
           //add an entry to the combo box and select it
           keystone_type_populate(self,TRUE,99);
@@ -2541,7 +2555,7 @@ int button_pressed(struct dt_iop_module_t *self, double x, double y, int which, 
         else
         {
           //Horizontal symetry button (1)
-          c[0] = (p->kxa+p->kxd)/2.0f, c[1] = (p->kya+p->kyd)/2.0f;
+          c[0] = (pts[0]+pts[6])/2.0f, c[1] = (pts[1]+pts[7])/2.0f;
           if (xx>c[0]-ext && xx<c[0]+ext && yy>c[1]-ext && yy<c[1]+ext && (p->k_type==1 || p->k_type==3))
           {
             if (p->k_sym == 0) p->k_sym = 1;
@@ -2552,7 +2566,7 @@ int button_pressed(struct dt_iop_module_t *self, double x, double y, int which, 
           else
           {
             //Horizontal symetry button (2)
-            c[0] = (p->kxb+p->kxc)/2.0f, c[1] = (p->kyb+p->kyc)/2.0f;
+            c[0] = (pts[2]+pts[4])/2.0f, c[1] = (pts[3]+pts[5])/2.0f;
             if (xx>c[0]-ext && xx<c[0]+ext && yy>c[1]-ext && yy<c[1]+ext && (p->k_type==1 || p->k_type==3))
             {
               if (p->k_sym == 0) p->k_sym = 1;
@@ -2563,7 +2577,7 @@ int button_pressed(struct dt_iop_module_t *self, double x, double y, int which, 
             else
             {
               //vertical symetry button (1)
-              c[0] = (p->kxb+p->kxa)/2.0f, c[1] = (p->kyb+p->kya)/2.0f;
+              c[0] = (pts[2]+pts[0])/2.0f, c[1] = (pts[3]+pts[1])/2.0f;
               if (xx>c[0]-ext && xx<c[0]+ext && yy>c[1]-ext && yy<c[1]+ext && (p->k_type==2 || p->k_type==3))
               {
                 if (p->k_sym == 0) p->k_sym = 2;
@@ -2574,7 +2588,7 @@ int button_pressed(struct dt_iop_module_t *self, double x, double y, int which, 
               else
               {
                 //vertical symetry button (2)
-                c[0] = (p->kxc+p->kxd)/2.0f, c[1] = (p->kyc+p->kyd)/2.0f;
+                c[0] = (pts[4]+pts[6])/2.0f, c[1] = (pts[5]+pts[7])/2.0f;
                 if (xx>c[0]-ext && xx<c[0]+ext && yy>c[1]-ext && yy<c[1]+ext && (p->k_type==2 || p->k_type==3))
                 {
                   if (p->k_sym == 0) p->k_sym = 2;
