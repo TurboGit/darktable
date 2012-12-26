@@ -1307,8 +1307,8 @@ void dt_dev_modules_update_multishow(dt_develop_t *dev)
 
 int dt_dev_distort_transform(dt_develop_t *dev, float *points, int points_count)
 {
-  GList *modules = g_list_last(dev->iop);
-  GList *pieces = g_list_last(dev->preview_pipe->nodes);
+  GList *modules = g_list_first(dev->iop);
+  GList *pieces = g_list_first(dev->preview_pipe->nodes);
   while (modules)
   {
     if (!pieces) return 0;
@@ -1317,16 +1317,16 @@ int dt_dev_distort_transform(dt_develop_t *dev, float *points, int points_count)
 
     module->distort_transform(module,piece,points,points_count);
     
-    modules = g_list_previous(modules);
-    pieces = g_list_previous(pieces);
+    modules = g_list_next(modules);
+    pieces = g_list_next(pieces);
   }
   return 1;
 }
 
 int dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_count)
 {
-  GList *modules = g_list_first(dev->iop);
-  GList *pieces = g_list_first(dev->preview_pipe->nodes);
+  GList *modules = g_list_last(dev->iop);
+  GList *pieces = g_list_last(dev->preview_pipe->nodes);
   while (modules)
   {
     if (!pieces) return 0;
@@ -1335,8 +1335,8 @@ int dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_co
     
     module->distort_backtransform(module,piece,points,points_count);
     
-    modules = g_list_next(modules);
-    pieces = g_list_next(pieces);
+    modules = g_list_previous(modules);
+    pieces = g_list_previous(pieces);
   }
   return 1;
 }

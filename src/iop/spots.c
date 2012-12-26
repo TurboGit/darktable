@@ -70,7 +70,7 @@ typedef struct dt_iop_spots_gui_data_t
   gboolean hoover_c; // is the pointer over the "clone from" end?
   float last_radius;
   spot_draw_t spot[32];
-  int image_id;
+  uint64_t pipe_hash;
 }
 dt_iop_spots_gui_data_t;
 
@@ -210,6 +210,35 @@ static void gui_spot_update_radius(dt_iop_module_t *self, spot_draw_t *gspt, int
   gui_spot_add(self,gspt,spot_index);
 }
 
+static int gui_spot_test_create(dt_iop_module_t *self)
+{
+  dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
+  dt_iop_spots_gui_data_t   *g = (dt_iop_spots_gui_data_t   *)self->gui_data;
+  
+  //we test if the image has changed
+  if (g->pipe_hash >= 0)
+  {
+    if (g->pipe_hash != self->dev->preview_pipe->backbuf_hash)
+    {
+      for (int i=0; i<32; i++)
+        if (g->spot[i].ok) gui_spot_remove(self,&g->spot[i],i);
+      g->pipe_hash = 0;
+    }
+  }
+  
+  //we create the spots if needed
+  for(int i=0; i<p->num_spots; i++)
+  {
+    if (!g->spot[i].ok)
+    {
+      gui_spot_add(self,&g->spot[i],i);
+      if (!g->spot[i].ok) return 0;
+    }
+  }
+  g->pipe_hash = self->dev->preview_pipe->backbuf_hash;
+  return 1;
+}
+
 // FIXME: doesn't work if source is outside of ROI
 void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void *i, void *o, const dt_iop_roi_t *roi_in, const dt_iop_roi_t *roi_out)
 {
@@ -295,17 +324,13 @@ void cleanup(dt_iop_module_t *module)
 
 void gui_focus (struct dt_iop_module_t *self, gboolean in)
 {
-  dt_iop_spots_params_t *p = (dt_iop_spots_params_t *)self->params;
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   if(self->enabled)
   {
     if(in)
     {
       // got focus.
-      for (int i=0; i<p->num_spots; i++)
-      {
-        if (!g->spot[i].ok) gui_spot_add(self,&g->spot[i],i);
-      }
+      gui_spot_test_create(self);
     }
     else
     {
@@ -343,10 +368,7 @@ void gui_update    (dt_iop_module_t *self)
   char str[3];
   snprintf(str,3,"%d",p->num_spots);
   gtk_label_set_text(g->label, str);
-  for (int i=0; i<p->num_spots; i++)
-  {
-    if (!g->spot[i].ok) gui_spot_add(self,&g->spot[i],i);
-  }
+
 }
 
 void gui_init     (dt_iop_module_t *self)
@@ -362,7 +384,7 @@ void gui_init     (dt_iop_module_t *self)
   {
     g->spot[i].ok = 0;
   }
-  g->image_id = -1;
+  g->pipe_hash = 0;
   
   self->widget = gtk_vbox_new(FALSE, 5);
   GtkWidget *label = gtk_label_new(_("click on a spot and drag on canvas to heal.\nuse the mouse wheel to adjust size.\nright click to remove a stroke."));
@@ -429,26 +451,11 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
   dashed[0] /= zoom_scale;
   dashed[1] /= zoom_scale;
   
-  //if image has changed, we have to unalloc all draw buffers
-  if (g->image_id >= 0)
-  {
-    if (g->image_id != self->dev->preview_pipe->image.id)
-    {
-      for (int i=0; i<32; i++)
-        if (g->spot[i].ok) gui_spot_remove(self,&g->spot[i],i);
-      g->image_id = -1;
-    }
-  }
+  //we update the spots if needed
+  if (!gui_spot_test_create(self)) return;
   
   for(int i=0; i<p->num_spots; i++)
   {
-    
-    if (!g->spot[i].ok)
-    {
-      gui_spot_add(self,&g->spot[i],i);
-      if (!g->spot[i].ok) continue;
-      g->image_id = self->dev->preview_pipe->image.id;
-    }
     spot_draw_t gspt = g->spot[i];
     if (gspt.pts_count < 4) continue;
     cairo_set_dash(cr, dashed, 0, 0);
