@@ -1306,8 +1306,8 @@ keystone_type_changed (GtkWidget *combo, dt_iop_module_t *self)
      //if the keystone is applied,autocrop must be disabled !
      gtk_widget_set_sensitive(g->crop_auto,FALSE);
      //and we can enable flip and rotate
-     gtk_widget_set_sensitive(g->hvflip, TRUE);
-     gtk_widget_set_sensitive(g->angle, TRUE);
+     //gtk_widget_set_sensitive(g->hvflip, TRUE);
+     //gtk_widget_set_sensitive(g->angle, TRUE);
      gtk_widget_set_sensitive(g->aspect_presets, TRUE);
      return; 
   }
@@ -1329,8 +1329,8 @@ keystone_type_changed (GtkWidget *combo, dt_iop_module_t *self)
   gtk_widget_set_sensitive(g->crop_auto,(g->k_show == 0));
   
   //if we are not setting keystone, we can enable flip and rotate
-  gtk_widget_set_sensitive(g->hvflip, (g->k_show == 0));
-  gtk_widget_set_sensitive(g->angle, (g->k_show == 0));
+  //gtk_widget_set_sensitive(g->hvflip, (g->k_show == 0));
+  //gtk_widget_set_sensitive(g->angle, (g->k_show == 0));
   gtk_widget_set_sensitive(g->aspect_presets, (g->k_show == 0));
      
   commit_box(self,g,p);
