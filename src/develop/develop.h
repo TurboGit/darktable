@@ -216,8 +216,16 @@ void dt_dev_module_update_multishow(dt_develop_t *dev, struct dt_iop_module_t *m
 /** same, but for all modules */
 void dt_dev_modules_update_multishow(dt_develop_t *dev);
 
+/*
+ * distort functions
+ */
+ /** apply all transforms to the specified points (in preview pipe space) */
 int dt_dev_distort_transform(dt_develop_t *dev, float *points, int points_count);
+ /** reverse apply all transforms to the specified points (in preview pipe space) */
 int dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_count);
+ /** same fct, but we can specify iop with priority between pmin and pmax. You can choose preview pipe space or full pipe space too */
+int dt_dev_distort_transform_plus(dt_develop_t *dev, int pmin, int pmax, int preview, float *points, int points_count);
+int dt_dev_distort_backtransform_plus(dt_develop_t *dev, int pmin, int pmax, int preview, float *points, int points_count);
 
 #endif
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

@@ -1307,34 +1307,51 @@ void dt_dev_modules_update_multishow(dt_develop_t *dev)
 
 int dt_dev_distort_transform(dt_develop_t *dev, float *points, int points_count)
 {
+  return dt_dev_distort_transform_plus(dev,0,99999,1,points,points_count);
+}
+int dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_count)
+{
+  return dt_dev_distort_backtransform_plus(dev,0,99999,1,points,points_count);
+}
+
+int dt_dev_distort_transform_plus(dt_develop_t *dev, int pmin, int pmax, int preview, float *points, int points_count)
+{
   GList *modules = g_list_first(dev->iop);
-  GList *pieces = g_list_first(dev->preview_pipe->nodes);
+  GList *pieces;
+  if (preview) pieces = g_list_first(dev->preview_pipe->nodes);
+  else pieces = g_list_first(dev->pipe->nodes);
   while (modules)
   {
     if (!pieces) return 0;
     dt_iop_module_t *module = (dt_iop_module_t *) (modules->data);
-    dt_dev_pixelpipe_iop_t *piece = (dt_dev_pixelpipe_iop_t *) (pieces->data);
-
-    module->distort_transform(module,piece,points,points_count);
-    
+    if ( module->priority <= pmax && module->priority >= pmin)
+    {
+      dt_dev_pixelpipe_iop_t *piece = (dt_dev_pixelpipe_iop_t *) (pieces->data);
+  
+      module->distort_transform(module,piece,points,points_count);
+    }
     modules = g_list_next(modules);
     pieces = g_list_next(pieces);
   }
   return 1;
 }
 
-int dt_dev_distort_backtransform(dt_develop_t *dev, float *points, int points_count)
+int dt_dev_distort_backtransform_plus(dt_develop_t *dev, int pmin, int pmax, int preview, float *points, int points_count)
 {
   GList *modules = g_list_last(dev->iop);
-  GList *pieces = g_list_last(dev->preview_pipe->nodes);
+  GList *pieces;
+  if (preview) pieces = g_list_last(dev->preview_pipe->nodes);
+  else pieces = g_list_last(dev->pipe->nodes);
   while (modules)
   {
     if (!pieces) return 0;
     dt_iop_module_t *module = (dt_iop_module_t *) (modules->data);
-    dt_dev_pixelpipe_iop_t *piece = (dt_dev_pixelpipe_iop_t *) (pieces->data);
-    
-    module->distort_backtransform(module,piece,points,points_count);
-    
+    if ( module->priority <= pmax && module->priority >= pmin)
+    {
+      dt_dev_pixelpipe_iop_t *piece = (dt_dev_pixelpipe_iop_t *) (pieces->data);
+      
+      module->distort_backtransform(module,piece,points,points_count);
+    }
     modules = g_list_previous(modules);
     pieces = g_list_previous(pieces);
   }

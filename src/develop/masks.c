@@ -64,6 +64,94 @@ int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, floa
   return _circle_get_points(dev,circle.center[0], circle.center[1], circle.radius + circle.border, border, border_count);   
 }
 
+int dt_masks_circle_get_area(dt_iop_module_t *module, dt_masks_circle_t circle, int *width, int *height, int *posx, int *posy)
+{
+  float wd = module->dev->pipe->iwidth;
+  float ht = module->dev->pipe->iheight;
+  
+  float r = (circle.radius + circle.border)*wd;
+  int l = (int) (2.0*M_PI*r);
+  
+  //buffer allocations
+  float *points = malloc(2*(l+1)*sizeof(float)); 
+  
+  //now we set the points
+  points[0] = circle.center[0]*wd;
+  points[1] = circle.center[1]*ht;
+  for (int i=1; i<l+1; i++)
+  {
+    float alpha = (i-1)*2.0*M_PI/(float) l;
+    points[i*2] = points[0] + r*cosf(alpha);
+    points[i*2+1] = points[1] + r*sinf(alpha);
+  }
+  
+  //and we transform them with all distorted modules
+  if (dt_dev_distort_transform_plus(module->dev,0,module->priority,0,points,l+1)) return 0;
+  
+  //now we search min and max
+  float xmin, xmax, ymin, ymax;
+  xmin = ymin = FLT_MAX;
+  xmax = ymax = FLT_MIN;
+  for (int i=1; i < l+1; i++)
+  {
+    xmin = fminf(points[i*2],xmin);
+    xmax = fmaxf(points[i*2],xmax);
+    ymin = fminf(points[i*2+1],ymin);
+    ymax = fmaxf(points[i*2+1],ymax);
+  }
+  
+  //and we set values
+  *posx = xmin;
+  *posy = ymin;
+  *width = xmax-xmin;
+  *height = ymax-ymin;
+  return 1;
+}
+
+int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_masks_circle_t circle, float **buffer, int *width, int *height, int *posx, int *posy)
+{
+  //we get the area
+  dt_masks_circle_get_area(module,circle,width,height,posx,posy);
+  
+  //we create a buffer of points with all points in the area
+  int w = *width, h = *height;
+  float *points = malloc(w*h*2*sizeof(float));
+  for (int i=0; i<h; i++)
+    for (int j=0; j<w; j++)
+    {
+      points[(i*w+j)*2] = j+(*posx);
+      points[(i*w+j)*2+1] = i+(*posy);
+    }
+    
+  //we back transform all this points
+  dt_dev_distort_backtransform_plus(module->dev,0,module->priority,0,points,w*h);
+  
+  //we allocate the buffer
+  *buffer = malloc(w*h*sizeof(float));
+  
+  //we populate the buffer
+  float wd = module->dev->pipe->iwidth;
+  float ht = module->dev->pipe->iheight;
+  float center[2] = {circle.center[0]*wd, circle.center[1]*ht};
+  float radius2 = circle.radius*wd*circle.radius*wd;
+  float total2 = (circle.radius+circle.border)*wd*(circle.radius+circle.border)*wd;
+  for (int i=0; i<h; i++)
+    for (int j=0; j<w; j++)
+    {
+      float x = points[(i*w+j)*2];
+      float y = points[(i*w+j)*2+1];
+      float l2 = (x-center[0])*(x-center[0]) + (y-center[1])*(y-center[1]);
+      if (l2<radius2) (*buffer)[i*w+j] = 1.0f;
+      else if (l2 < total2)
+      {
+        (*buffer)[i*w+j] = (total2-l2)/(total2-radius2);
+      }
+      else (*buffer)[i*w+j] = 0.0f;
+    }
+  free(points);
+  return 1;
+}
+
 /*
 int _create_buffer(dt_iop_module_t *module)
 {
