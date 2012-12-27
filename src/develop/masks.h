@@ -28,26 +28,75 @@
 #include "develop/pixelpipe.h"
 #include "common/opencl.h"
 
-typedef struct dt_iop_mask_t
+typedef enum dt_masks_type_t
+{
+  DT_MASKS_NONE     = 0,
+  DT_MASKS_CIRCLE   = 1,
+  DT_MASKS_POLYGON  = 2,
+  DT_MASKS_BEZIER   = 3
+}
+dt_masks_type_t;
+
+/** structure used to define a circle */
+typedef struct dt_masks_circle_t
 {
   float center[2];
   float radius;
   float border;
-  int used;
+  
+  //id used to store the form
+  long form_id;
 }
-dt_iop_mask_t;
+dt_masks_circle_t;
 
-typedef struct dt_iop_mask_gui_t
+typedef struct dt_masks_bezier_t
 {
-  GtkWidget *label;
-  gboolean editing;
-  gboolean dragging;
-  gboolean selected;
+  //points used to define the form.
+  //ctrl1aX - ctrl1aY - pt1X - pt1Y - ctrl1bX - ctrl1bY - .....
+  float points[600];
+  //points used to draw the border : 1 point per node
+  float border[300];
+  
+  //nb of points (<=150)
+  int points_count;
+  
+  dt_masks_type_t form;
+  
+  //id used to store the form
+  long form_id;
+}
+dt_masks_bezier_t;
+
+/*
+typedef struct dt_masks_gui_form_t
+{
+  //all the point needed to draw the form
   float *points;
   int points_count;
-}
-dt_iop_mask_gui_t;
+  float *border;
+  int border_count;
+  
+  gboolean dragging;
+  gboolean selected;
 
+  int selected_pts;
+  int selected_seg;
+  int dragging_pts;
+  int dragging seg;
+  
+  gboolean ok;
+  
+  uint64_t pipe_hash;
+}
+dt_masks_gui_form_t;
+*/
+
+int dt_masks_circle_get_points(dt_develop_t *dev, dt_masks_circle_t circle, float **points, int *points_count);
+int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, float **border, int *border_count);
+
+int dt_masks_circle_get_mask(dt_develop_t *dev, dt_masks_circle_t circle, float **buffer, int *width, int *height);
+
+#if 0
 /** initialise masks */
 int dt_iop_masks_init(dt_iop_module_t *module);
 
@@ -66,8 +115,9 @@ int dt_iop_masks_post_expose(dt_iop_module_t *module, cairo_t *cr, int32_t width
 /** used to get the mask buffer, his size and coordinates */
 /** mask is store a 1 channel float. values are transparency */
 int dt_iop_masks_get_mask();
+#endif
 
-
+#endif
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
 // vim: shiftwidth=2 expandtab tabstop=2 cindent
 // kate: tab-indents: off; indent-width 2; replace-tabs on; indent-mode cstyle; remove-trailing-space on;

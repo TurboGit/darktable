@@ -19,8 +19,52 @@
 #include "develop/imageop.h"
 #include "develop/tiling.h"
 #include "common/gaussian.h"
-#include "masks.h"
+#include "develop/masks.h"
 
+int _circle_get_points(dt_develop_t *dev, float x, float y, float radius, float **points, int *points_count)
+{
+  float wd = dev->preview_pipe->iwidth;
+  float ht = dev->preview_pipe->iheight;
+
+  //how many points do we need ?
+  float r = radius*wd;
+  int l = (int) (2.0*M_PI*r);
+  
+  //buffer allocations
+  *points = malloc(2*(l+1)*sizeof(float));
+  *points_count = l+1;  
+  
+  //now we set the points
+  (*points)[0] = x*wd;
+  (*points)[1] = y*ht;
+  for (int i=1; i<l+1; i++)
+  {
+    float alpha = (i-1)*2.0*M_PI/(float) l;
+    (*points)[i*2] = (*points)[0] + r*cosf(alpha);
+    (*points)[i*2+1] = (*points)[1] + r*sinf(alpha);
+  }
+  
+  //and we transform them with all distorted modules
+  if (dt_dev_distort_transform(dev,*points,l+1)) return 1;
+  
+  //if we failed, then free all and return
+  free(*points);
+  *points = NULL;
+  *points_count = 0;
+  return 0;  
+}
+
+int dt_masks_circle_get_points(dt_develop_t *dev, dt_masks_circle_t circle, float **points, int *points_count)
+{
+  return _circle_get_points(dev,circle.center[0], circle.center[1], circle.radius, points, points_count); 
+}
+
+int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, float **border, int *border_count)
+{
+  return _circle_get_points(dev,circle.center[0], circle.center[1], circle.radius + circle.border, border, border_count);   
+}
+
+/*
 int _create_buffer(dt_iop_module_t *module)
 {
   dt_develop_t *dev = module->dev;
@@ -203,6 +247,9 @@ int dt_iop_masks_post_expose(dt_iop_module_t *module, cairo_t *cr, int32_t width
 {
   if (!module->mask_gui->editing) return 0;
   if (!module->mask->used) return 0;
+
+  dt_iop_mask_t *p = module->mask;
+  dt_iop_mask_gui_t *g = module->mask_gui;
   
   //create the buffer if needed
   if (g->points_count < 7)
@@ -213,7 +260,39 @@ int dt_iop_masks_post_expose(dt_iop_module_t *module, cairo_t *cr, int32_t width
   //if the buffer is created, we draw it
   if (g->points_count < 7) return 0;
   
+  double dashed[] = {4.0, 2.0};
+  dashed[0] /= zoom_scale;
+  dashed[1] /= zoom_scale;
+  cairo_set_dash(cr, dashed, 0, 0);
+  cairo_set_line_cap(cr,CAIRO_LINE_CAP_ROUND);
+  cairo_set_source_rgba(cr, .3, .3, .3, .8);
+  
+  if (g->selected || g->dragging) cairo_set_line_width(cr, 5.0/zoom_scale);
+  else cairo_set_line_width(cr, 3.0/zoom_scale);
+  if (g->dragging)
+  {
+    src_x = p->spot[i].xc*wd;
+    src_y = p->spot[i].yc*ht;
+    cairo_arc (cr, src_x, src_y, 10.0, 0, 2.0*M_PI);
+  }
+  else
+  {
+    cairo_move_to(cr,gspt.source[2],gspt.source[3]);
+    for (int i=2; i<gspt.pts_count; i++)
+    {
+      cairo_line_to(cr,gspt.source[i*2],gspt.source[i*2+1]);
+    }
+    cairo_line_to(cr,gspt.source[2],gspt.source[3]);
+    src_x = gspt.source[0];
+    src_y = gspt.source[1];
+  }
+  cairo_stroke_preserve(cr);
+  if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
+  else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
+  cairo_set_source_rgba(cr, .8, .8, .8, .8);
+  cairo_stroke(cr);
 }
+*/
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
 // vim: shiftwidth=2 expandtab tabstop=2 cindent
