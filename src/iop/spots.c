@@ -123,36 +123,26 @@ static void gui_spot_remove(dt_iop_module_t *self, spot_draw_t *gspt, int spot_i
 
 static void gui_spot_update_source(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
 {
-  printf("ok1\n");
   //we remove the source buffers
   gspt->source_count = gspt->source_border_count = 0;
-  printf("ok2\n");
   free(gspt->source);
-  printf("ok13\n");
   gspt->source = NULL;
-  printf("ok4\n");
   free(gspt->source_border);
-  printf("ok5\n");
   gspt->source_border = NULL;
-  printf("ok6\n");
   
   //and we recreate them
   dt_develop_t *dev = self->dev;
   dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
-  printf("ok7\n");
   if (dt_masks_circle_get_points(dev,p->spot[spot_index].source, &gspt->source, &gspt->source_count))
     if (dt_masks_circle_get_border(dev,p->spot[spot_index].source, &gspt->source_border, &gspt->source_border_count))
     {
       return;
     }
-  printf("ok8\n");
   //if it fails, we delete spot buffer too
   gspt->spot_count = 0;
   free(gspt->spot);
-  printf("ok9\n");
   gspt->spot = NULL;
   gspt->ok = 0;
-  printf("ok10\n");
 }
 static void gui_spot_update_spot(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
 {
@@ -219,7 +209,7 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
 {
   dt_iop_spots_params_t *d = (dt_iop_spots_params_t *)piece->data;
   // const float scale = piece->iscale/roi_in->scale;
-  const float scale = 1.0f/roi_in->scale;
+  //const float scale = 1.0f/roi_in->scale;
   const int ch = piece->colors;
   // we don't modify most of the image:
   memcpy(o, i, sizeof(float)*roi_in->width*roi_in->height*ch);
@@ -229,11 +219,34 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
   // .. just a few spots:
   for(int i=0; i<d->num_spots; i++)
   {
+    //we get the mask
+    float *mask;
+    int posx,posy,width,height;    
+    dt_masks_circle_get_mask(self,piece->pipe,roi_in->scale*piece->buf_in.width,roi_in->scale*piece->buf_in.height,d->spot[i].spot,&mask,&width,&height,&posx,&posy);
+    posx -= roi_in->x;
+    posy -= roi_in->y;
+    int posx_source = posx + (d->spot[i].source.center[0] - d->spot[i].spot.center[0])*roi_in->scale*piece->buf_in.width;
+    int posy_source = posy + (d->spot[i].source.center[1] - d->spot[i].spot.center[1])*roi_in->scale*piece->buf_in.height;
+    
+    printf("vals %d %d %d %d   %d %d  %f\n", posx,posy,posx_source,posy_source, piece->buf_in.width, piece->buf_in.height, roi_in->scale);
+    for (int i=posy ; i<posy+height; i++)
+      for (int j=posx ; j<posx+width; j++)
+      {
+        float f = mask[(i-posy)*width + j - posx];
+        for(int c=0; c<ch; c++)
+          out[4*(roi_out->width*i + j) + c] =
+            out[4*(roi_out->width*i + j) + c] * (1.0f-f) +
+            in[4*(roi_in->width*(i-posy+posy_source) + j-posx+posx_source) + c] * f;
+      }
+    /*
     // convert from world space:
     const int x  = (d->spot[i].spot.center[0] *piece->buf_in.width)/scale - roi_in->x;
     const int y  = (d->spot[i].spot.center[1] *piece->buf_in.height)/scale - roi_in->y;
     const int xc = (d->spot[i].source.center[0]*piece->buf_in.width)/scale - roi_in->x;
     const int yc = (d->spot[i].source.center[1]*piece->buf_in.height)/scale - roi_in->y;
+    
+    printf("vals %d %d  %d %d    %d %d  %d %d    %d\n",x,y,roi_in->x, roi_in->y,posx,posy,width,height,rep);
+    
     const int rad = (d->spot[i].source.radius + d->spot[i].source.border)* MIN(piece->buf_in.width, piece->buf_in.height)/scale;
     const int um = MIN(rad, MIN(x, xc));
     const int uM = MIN(rad, MIN(roi_in->width-1-xc, roi_in->width-1-x));
@@ -261,6 +274,8 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
             out[4*(roi_out->width*(y+v) + x+u) + c] * (1.0f-f) +
             in[4*(roi_in->width*(yc+v) + xc+u) + c] * f;
       }
+      */
+    
   }
 }
 
@@ -436,7 +451,6 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
     spot_draw_t gspt = g->spot[i];    
     float src_x=0, src_y=0, spt_x=0, spt_y=0;
     
-    printf("nb points %d %d %d\n", gspt.source_count, gspt.source_border_count, gspt.spot_count);
     //source
     if (gspt.source_count > 6)
     { 
@@ -454,7 +468,6 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       }
       else
       {
-        printf("draw source\n");
         cairo_move_to(cr,gspt.source[2],gspt.source[3]);
         for (int i=2; i<gspt.source_count; i++)
         {
@@ -484,7 +497,6 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       }
       else
       {
-        printf("draw source border\n");
         cairo_move_to(cr,gspt.source_border[2],gspt.source_border[3]);
         for (int i=2; i<gspt.source_border_count; i++)
         {
@@ -514,7 +526,6 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       }
       else
       {
-        printf("draw spot\n");
         cairo_move_to(cr,gspt.spot[2],gspt.spot[3]);
         for (int i=2; i<gspt.spot_count; i++)
         {

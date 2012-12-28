@@ -94,8 +94,8 @@ dt_masks_gui_form_t;
 int dt_masks_circle_get_points(dt_develop_t *dev, dt_masks_circle_t circle, float **points, int *points_count);
 int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, float **border, int *border_count);
 
-int dt_masks_circle_get_area(dt_iop_module_t *module, dt_masks_circle_t circle, int *width, int *height, int *posx, int *posy);
-int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_masks_circle_t circle, float **buffer, int *width, int *height, int *posx, int *posy);
+int dt_masks_circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, int *width, int *height, int *posx, int *posy);
+int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, float **buffer, int *width, int *height, int *posx, int *posy);
 
 #if 0
 /** initialise masks */
