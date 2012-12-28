@@ -101,7 +101,6 @@ int dt_masks_circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, 
   *posy = ymin;
   *width = (xmax-xmin);
   *height = (ymax-ymin);
-  printf("area %d %d  %d %d\n", *posx,*posy, *width, *height);
   return 1;
 }
 
@@ -109,7 +108,7 @@ int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, 
 {
   //we get the area
   if (!dt_masks_circle_get_area(module,pipe,wd,ht,circle,width,height,posx,posy)) return 0;
-  printf("after area %d %d  %d %d\n", *posx,*posy, *width, *height);
+  
   //we create a buffer of points with all points in the area
   int w = *width, h = *height;
   float *points = malloc(w*h*2*sizeof(float));
