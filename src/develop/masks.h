@@ -67,56 +67,11 @@ typedef struct dt_masks_bezier_t
 }
 dt_masks_bezier_t;
 
-/*
-typedef struct dt_masks_gui_form_t
-{
-  //all the point needed to draw the form
-  float *points;
-  int points_count;
-  float *border;
-  int border_count;
-  
-  gboolean dragging;
-  gboolean selected;
-
-  int selected_pts;
-  int selected_seg;
-  int dragging_pts;
-  int dragging seg;
-  
-  gboolean ok;
-  
-  uint64_t pipe_hash;
-}
-dt_masks_gui_form_t;
-*/
-
-int dt_masks_circle_get_points(dt_develop_t *dev, dt_masks_circle_t circle, float **points, int *points_count);
-int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, float **border, int *border_count);
+int dt_masks_circle_get_points(dt_develop_t *dev, dt_masks_circle_t circle, float **points, int *points_count, float dx, float dy);
+int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, float **border, int *border_count, float dx, float dy);
 
 int dt_masks_circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, int *width, int *height, int *posx, int *posy);
 int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, float **buffer, int *width, int *height, int *posx, int *posy);
-
-#if 0
-/** initialise masks */
-int dt_iop_masks_init(dt_iop_module_t *module);
-
-/** set masks edit mode */
-int dt_iop_masks_set_edit(dt_iop_module_t *module,int editing);
-
-/** gui events */
-int dt_iop_masks_button_pressed(dt_iop_module_t *module, double x, double y, int which, int type, uint32_t state);
-int dt_iop_masks_button_released(struct dt_iop_module_t *module, double x, double y, int which, uint32_t state);
-int dt_iop_masks_scrolled(dt_iop_module_t *module, double x, double y, int up, uint32_t state);
-int dt_iop_masks_mouse_moved(dt_iop_module_t *module, double x, double y, int which);
-
-/** drawing to canvas routine */
-int dt_iop_masks_post_expose(dt_iop_module_t *module, cairo_t *cr, int32_t width, int32_t height, int32_t pointerx, int32_t pointery);
-
-/** used to get the mask buffer, his size and coordinates */
-/** mask is store a 1 channel float. values are transparency */
-int dt_iop_masks_get_mask();
-#endif
 
 #endif
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

@@ -36,7 +36,7 @@ DT_MODULE(2)
 typedef struct spot_t
 {
   dt_masks_circle_t spot;
-  dt_masks_circle_t source;
+  float source[2];
   
   float opacity;  //between 0 and 1
   
@@ -125,10 +125,10 @@ legacy_params (dt_iop_module_t *self, const void *const old_params, const int ol
       n->spot[i].opacity = 1.0f;
       n->spot[i].spot.center[0] = o->spot[i].x;
       n->spot[i].spot.center[1] = o->spot[i].y;
-      n->spot[i].source.center[0] = o->spot[i].xc;
-      n->spot[i].source.center[1] = o->spot[i].yc;
-      n->spot[i].spot.border = n->spot[i].source.border = 0.0f;
-      n->spot[i].spot.radius = n->spot[i].source.radius = o->spot[i].radius;
+      n->spot[i].source[0] = o->spot[i].xc;
+      n->spot[i].source[1] = o->spot[i].yc;
+      n->spot[i].spot.border = 0.0f;
+      n->spot[i].spot.radius = o->spot[i].radius;
     }
     return 0;
   }
@@ -141,14 +141,15 @@ static void gui_spot_add(dt_iop_module_t *self, spot_draw_t *gspt, int spot_inde
   dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
   gspt->ok = 0;
   gspt->source_count = gspt->source_border_count = gspt->spot_count = 0;
-  
-  if (dt_masks_circle_get_points(dev,p->spot[spot_index].source, &gspt->source, &gspt->source_count))
+  float dx = p->spot[spot_index].spot.center[0] - p->spot[spot_index].source[0];
+  float dy = p->spot[spot_index].spot.center[1] - p->spot[spot_index].source[1];
+  if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->source, &gspt->source_count,dx,dy))
   {
-    if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->spot, &gspt->spot_count))
+    if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->spot, &gspt->spot_count,0,0))
     {
       if (p->spot[spot_index].version > 1)
       {
-        if (dt_masks_circle_get_border(dev,p->spot[spot_index].source, &gspt->source_border, &gspt->source_border_count))
+        if (dt_masks_circle_get_border(dev,p->spot[spot_index].source, &gspt->source_border, &gspt->source_border_count,dx,dy))
         {
           gspt->ok = 1;
         }
@@ -189,11 +190,13 @@ static void gui_spot_update_source(dt_iop_module_t *self, spot_draw_t *gspt, int
   }
   
   //and we recreate them
-  if (dt_masks_circle_get_points(dev,p->spot[spot_index].source, &gspt->source, &gspt->source_count))
+  float dx = p->spot[spot_index].spot.center[0] - p->spot[spot_index].source[0];
+  float dy = p->spot[spot_index].spot.center[1] - p->spot[spot_index].source[1];
+  if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->source, &gspt->source_count,dx,dy))
   {
     if (p->spot[spot_index].version > 1)
     {
-      if (dt_masks_circle_get_border(dev,p->spot[spot_index].source, &gspt->source_border, &gspt->source_border_count))
+      if (dt_masks_circle_get_border(dev,p->spot[spot_index].spot, &gspt->source_border, &gspt->source_border_count,dx,dy))
       {
         return;
       }
@@ -294,8 +297,8 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
     dt_masks_circle_get_mask(self,piece->pipe,roi_in->scale*piece->buf_in.width,roi_in->scale*piece->buf_in.height,d->spot[i].spot,&mask,&width,&height,&posx,&posy);
     posx -= roi_in->x;
     posy -= roi_in->y;
-    int posx_source = posx + (d->spot[i].source.center[0] - d->spot[i].spot.center[0])*roi_in->scale*piece->buf_in.width;
-    int posy_source = posy + (d->spot[i].source.center[1] - d->spot[i].spot.center[1])*roi_in->scale*piece->buf_in.height;
+    int posx_source = posx + (d->spot[i].source[0] - d->spot[i].spot.center[0])*roi_in->scale*piece->buf_in.width;
+    int posy_source = posy + (d->spot[i].source[1] - d->spot[i].spot.center[1])*roi_in->scale*piece->buf_in.height;
 
     for (int yy=posy ; yy<posy+height; yy++)
       for (int xx=posx ; xx<posx+width; xx++)
@@ -313,8 +316,8 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
       // convert from world space:
       const int x  = (d->spot[i].spot.center[0] *piece->buf_in.width)/scale - roi_in->x;
       const int y  = (d->spot[i].spot.center[1] *piece->buf_in.height)/scale - roi_in->y;
-      const int xc = (d->spot[i].source.center[0]*piece->buf_in.width)/scale - roi_in->x;
-      const int yc = (d->spot[i].source.center[1]*piece->buf_in.height)/scale - roi_in->y;      
+      const int xc = (d->spot[i].source[0]*piece->buf_in.width)/scale - roi_in->x;
+      const int yc = (d->spot[i].source[1]*piece->buf_in.height)/scale - roi_in->y;      
       const int rad = d->spot[i].source.radius* MIN(piece->buf_in.width, piece->buf_in.height)/scale;
       const int um = MIN(rad, MIN(x, xc));
       const int uM = MIN(rad, MIN(roi_in->width-1-xc, roi_in->width-1-x));
@@ -432,7 +435,6 @@ void gui_update    (dt_iop_module_t *self)
 void gui_init     (dt_iop_module_t *self)
 {
   self->gui_data = malloc(sizeof(dt_iop_spots_gui_data_t));
-  //dt_iop_spots_params_t *p = (dt_iop_spots_params_t *)self->params;
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   g->dragging = -1;
   g->selected = -1;
@@ -517,64 +519,65 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 5.0/zoom_scale);
       else                                     cairo_set_line_width(cr, 3.0/zoom_scale);
       cairo_set_source_rgba(cr, .3, .3, .3, .8);
-    if (g->dragging == i && g->hoover_c)
-    {
-      src_x = p->spot[i].xc*wd;
-      src_y = p->spot[i].yc*ht;
-      float dx = src_x - gspt.source[0], dy = src_y - gspt.source[1];
-      cairo_move_to(cr,gspt.source[2]+dx,gspt.source[3]+dy);
-      for (int i=2; i<gspt.pts_count; i++)
+      if (g->dragging == i && g->hoover_c)
       {
-        cairo_line_to(cr,gspt.source[i*2]+dx,gspt.source[i*2+1]+dy);
+        src_x = p->spot[i].source[0]*wd;
+        src_y = p->spot[i].source[1]*ht;
+        float dx = src_x - gspt.source[0], dy = src_y - gspt.source[1];
+        cairo_move_to(cr,gspt.source[2]+dx,gspt.source[3]+dy);
+        for (int i=2; i<gspt.pts_count; i++)
+        {
+          cairo_line_to(cr,gspt.source[i*2]+dx,gspt.source[i*2+1]+dy);
+        }
+        cairo_line_to(cr,gspt.source[2]+dx,gspt.source[3]+dy);
       }
-      cairo_line_to(cr,gspt.source[2]+dx,gspt.source[3]+dy);
-    }
-    else
-    {
-      cairo_move_to(cr,gspt.source[2],gspt.source[3]);
-      for (int i=2; i<gspt.pts_count; i++)
+      else
       {
-        cairo_line_to(cr,gspt.source[i*2],gspt.source[i*2+1]);
+        cairo_move_to(cr,gspt.source[2],gspt.source[3]);
+        for (int i=2; i<gspt.pts_count; i++)
+        {
+          cairo_line_to(cr,gspt.source[i*2],gspt.source[i*2+1]);
+        }
+        cairo_line_to(cr,gspt.source[2],gspt.source[3]);
+        src_x = gspt.source[0];
+        src_y = gspt.source[1];
       }
-      cairo_line_to(cr,gspt.source[2],gspt.source[3]);
-      src_x = gspt.source[0];
-      src_y = gspt.source[1];
+      cairo_stroke_preserve(cr);
+      if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
+      else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
+      cairo_set_source_rgba(cr, .8, .8, .8, .8);
+      cairo_stroke(cr);
     }
-    cairo_stroke_preserve(cr);
-    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
-    else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
-    cairo_set_source_rgba(cr, .8, .8, .8, .8);
-    cairo_stroke(cr);
+
+    //border
+    if (gspt.border_count > 6)
+    { 
+      cairo_set_dash(cr, dashed, len, 0);     
+      if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
+      else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
+      cairo_set_source_rgba(cr, .3, .3, .3, .8);
+      if (g->dragging == i && g->hoover_c)
+      {
+        //nothing to do...
+      }
+      else
+      {
+        cairo_move_to(cr,gspt.border[2],gspt.border[3]);
+        for (int i=2; i<gspt.border_count; i++)
+        {
+          cairo_line_to(cr,gspt.border[i*2],gspt.border[i*2+1]);
+        }
+        cairo_line_to(cr,gspt.border[2],gspt.border[3]);
+      }
+      cairo_stroke_preserve(cr);
+      if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
+      else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
+      cairo_set_source_rgba(cr, .8, .8, .8, .8);
+      cairo_set_dash(cr, dashed, len, 4);
+      cairo_stroke(cr);
+    }
     
     //spot
-    cairo_set_line_cap(cr,CAIRO_LINE_CAP_ROUND);
-    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 5.0/zoom_scale);
-    else                                     cairo_set_line_width(cr, 3.0/zoom_scale);
-    cairo_set_source_rgba(cr, .3, .3, .3, .8);
-    if (g->dragging == i && !g->hoover_c)
-    {
-      spt_x = p->spot[i].x*wd;
-      spt_y = p->spot[i].y*ht;
-      float dx = spt_x - gspt.spot[0], dy = spt_y - gspt.spot[1];
-      cairo_move_to(cr,gspt.spot[2]+dx,gspt.spot[3]+dy);
-      for (int i=2; i<gspt.pts_count; i++)
-      {
-        cairo_line_to(cr,gspt.spot[i*2]+dx,gspt.spot[i*2+1]+dy);
-      }
-      cairo_line_to(cr,gspt.spot[2]+dx,gspt.spot[3]+dy);
-    }
-    else
-    {
-      cairo_move_to(cr,gspt.spot[2],gspt.spot[3]);
-      for (int i=2; i<gspt.pts_count; i++)
-      {
-        cairo_line_to(cr,gspt.spot[i*2],gspt.spot[i*2+1]);
-      }
-      cairo_line_to(cr,gspt.spot[2],gspt.spot[3]);
-      spt_x = gspt.spot[0];
-      spt_y = gspt.spot[1];
-    }
-    cairo_stroke_preserve(cr);
     if (gspt.spot_count > 6)
     {
       cairo_set_dash(cr, dashed, 0,0);
@@ -583,9 +586,15 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       cairo_set_source_rgba(cr, .3, .3, .3, .8);
       if (g->dragging == i && !g->hoover_c)
       {
-        spt_x = pzx*wd;
-        spt_y = pzy*ht;
-        cairo_arc (cr, spt_x, spt_y, 10.0, 0, 2.0*M_PI);
+        spt_x = p->spot[i].spot.center[0]*wd;
+        spt_y = p->spot[i].spot.center[1]*ht;
+        float dx = spt_x - gspt.spot[0], dy = spt_y - gspt.spot[1];
+        cairo_move_to(cr,gspt.spot[2]+dx,gspt.spot[3]+dy);
+        for (int i=2; i<gspt.pts_count; i++)
+        {
+          cairo_line_to(cr,gspt.spot[i*2]+dx,gspt.spot[i*2+1]+dy);
+        }
+        cairo_line_to(cr,gspt.spot[2]+dx,gspt.spot[3]+dy);
       }
       else
       {
@@ -602,7 +611,7 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
       else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
       cairo_set_source_rgba(cr, .8, .8, .8, .8);
-    cairo_stroke(cr);
+      cairo_stroke(cr);
     }
     
     //line between
@@ -661,8 +670,8 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
   {
     if(g->hoover_c)
     {
-      p->spot[g->dragging].source.center[0] = pzx;
-      p->spot[g->dragging].source.center[1] = pzy;
+      p->spot[g->dragging].source[0] = pzx;
+      p->spot[g->dragging].source[1] = pzy;
     }
     else
     {
@@ -670,12 +679,12 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
       p->spot[g->dragging].spot.center[0] = pzy;
     }
   }
-  if(selected >= 0 && mind < p->spot[selected].source.radius * p->spot[selected].source.radius * wd * wd)
+  if(selected >= 0 && mind < p->spot[selected].spot.radius * p->spot[selected].spot.radius * wd * wd)
   {
     g->selected = selected;
     g->hoover_c = hoover_c;
   }
-  else if(selected >= 0 && p->spot[selected].version > 1 && mind < (p->spot[selected].source.radius + p->spot[selected].source.border) * (p->spot[selected].source.radius + p->spot[selected].source.border) * wd * wd)
+  else if(selected >= 0 && p->spot[selected].version > 1 && mind < (p->spot[selected].spot.radius + p->spot[selected].spot.border) * (p->spot[selected].spot.radius + p->spot[selected].spot.border) * wd * wd)
   {
     g->selected = selected;
     g->border = TRUE;
@@ -698,18 +707,16 @@ int scrolled(dt_iop_module_t *self, double x, double y, int up, uint32_t state)
     }
     else if (g->border)
     {
-      if(up && p->spot[g->selected].source.border > 0.002f) p->spot[g->selected].source.border *= 0.9f;
-      else  if(p->spot[g->selected].source.border < 0.1f  ) p->spot[g->selected].source.border *= 1.0f/0.9f;
-      p->spot[g->selected].spot.border = p->spot[g->selected].source.border;
+      if(up && p->spot[g->selected].spot.border > 0.002f) p->spot[g->selected].spot.border *= 0.9f;
+      else  if(p->spot[g->selected].spot.border < 0.1f  ) p->spot[g->selected].spot.border *= 1.0f/0.9f;
       gui_spot_update_radius(self,&g->spot[g->selected],g->selected);
     }
     else
     {
-      if(up && p->spot[g->selected].source.radius > 0.002f) p->spot[g->selected].source.radius *= 0.9f;
-      else  if(p->spot[g->selected].source.radius < 0.1f  ) p->spot[g->selected].source.radius *= 1.0f/0.9f;
-      p->spot[g->selected].spot.radius = p->spot[g->selected].source.radius;
+      if(up && p->spot[g->selected].spot.radius > 0.002f) p->spot[g->selected].spot.radius *= 0.9f;
+      else  if(p->spot[g->selected].spot.radius < 0.1f  ) p->spot[g->selected].spot.radius *= 1.0f/0.9f;
       gui_spot_update_radius(self,&g->spot[g->selected],g->selected);
-      g->last_radius = p->spot[g->selected].source.radius;
+      g->last_radius = p->spot[g->selected].spot.radius;
       dt_conf_set_float("ui_last/spot_size", g->last_radius);
     }
     dt_dev_add_history_item(darktable.develop, self, TRUE);
@@ -744,14 +751,14 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
       // on *wd|*ht scale, radius on *min(wd, ht).
       float wd = self->dev->preview_pipe->backbuf_width;
       float ht = self->dev->preview_pipe->backbuf_height;
-      p->spot[i].spot.radius = p->spot[i].source.radius = g->last_radius;
-      p->spot[i].spot.border = p->spot[i].source.border = g->last_radius/2.0f;
+      p->spot[i].spot.radius = g->last_radius;
+      p->spot[i].spot.border = g->last_radius/2.0f;
       p->spot[i].opacity = 1.0f;
       p->spot[i].version = 2;
       float pts[2] = {pzx*wd,pzy*ht};
       dt_dev_distort_backtransform(self->dev,pts,1);
-      p->spot[i].spot.center[0] = p->spot[i].source.center[0] = pts[0]/self->dev->preview_pipe->iwidth;
-      p->spot[i].spot.center[1] = p->spot[i].source.center[1] = pts[1]/self->dev->preview_pipe->iheight;
+      p->spot[i].spot.center[0] = p->spot[i].source[0] = pts[0]/self->dev->preview_pipe->iwidth;
+      p->spot[i].spot.center[1] = p->spot[i].source[1] = pts[1]/self->dev->preview_pipe->iheight;
       gui_spot_add(self,&g->spot[i],i);
       g->selected = i;
       g->hoover_c = TRUE;
@@ -762,13 +769,13 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
       g->dragging = g->selected;
       if (g->hoover_c)
       {
-        p->spot[g->selected].xc = pzx;
-        p->spot[g->selected].yc = pzy;
+        p->spot[g->selected].source[0] = pzx;
+        p->spot[g->selected].source[1] = pzy;
       }
       else
       {
-        p->spot[g->selected].x = pzx;
-        p->spot[g->selected].y = pzy;
+        p->spot[g->selected].spot.center[0] = pzx;
+        p->spot[g->selected].spot.center[1] = pzy;
       }
     }
     return 1;
@@ -794,8 +801,8 @@ int button_released(struct dt_iop_module_t *self, double x, double y, int which,
     dt_dev_distort_backtransform(self->dev,pts,1);
     if(g->hoover_c)
     {
-      p->spot[i].source.center[0] = pts[0]/self->dev->preview_pipe->iwidth;
-      p->spot[i].source.center[1] = pts[1]/self->dev->preview_pipe->iheight;
+      p->spot[i].source[0] = pts[0]/self->dev->preview_pipe->iwidth;
+      p->spot[i].source[1] = pts[1]/self->dev->preview_pipe->iheight;
       gui_spot_update_source(self,&g->spot[i],i);
     }
     else
