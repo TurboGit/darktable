@@ -300,9 +300,14 @@ static void strip_semicolons_from_keymap(const char* path)
 
   fclose(fin);
   fclose(fout);
-  g_file_delete(g_file_new_for_path(path), NULL, NULL);
-  g_file_move(g_file_new_for_path(pathtmp), g_file_new_for_path(path), 0,
-              NULL, NULL, NULL, NULL);
+
+  GFile *gpath = g_file_new_for_path(path);
+  GFile *gpathtmp = g_file_new_for_path(pathtmp);
+
+  g_file_delete(gpath, NULL, NULL);
+  g_file_move(gpathtmp, gpath, 0, NULL, NULL, NULL, NULL);
+  g_object_unref(gpath);
+  g_object_unref(gpathtmp);
 }
 
 int dt_load_from_string(const gchar* input, gboolean open_image_in_dr)
@@ -504,10 +509,12 @@ int dt_init(int argc, char *argv[], const int init_gui)
         k ++;
       }
     }
+#ifndef MAC_INTEGRATION
     else
     {
       images_to_load = g_slist_append(images_to_load, argv[k]);
     }
+#endif
   }
 
   if(darktable.unmuted & DT_DEBUG_MEMORY)

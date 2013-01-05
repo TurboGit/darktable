@@ -57,6 +57,7 @@
 #include "common/darktable.h"
 #include "common/exif.h"
 #include "common/imageio_module.h"
+#include "common/imageio.h"
 #include "control/conf.h"
 #include "dtgtk/slider.h"
 
@@ -81,6 +82,7 @@ typedef struct dt_imageio_j2k_t
 {
   int max_width, max_height;
   int width, height;
+  char style[128];
   int bpp;
   int format;
   enum{DT_J2K_PRESET_OFF, DT_J2K_PRESET_CINEMA2K_24, DT_J2K_PRESET_CINEMA2K_48, DT_J2K_PRESET_CINEMA4K_24} preset;
@@ -449,6 +451,7 @@ int write_image (dt_imageio_j2k_t *j2k, const char *filename, const float *in, v
   if(res < (size_t)codestream_length) /* FIXME */
   {
     fprintf(stderr, "failed to write %d (%s)\n", codestream_length, filename);
+    fclose(f);
     return 1;
   }
   fclose(f);
@@ -509,6 +512,12 @@ set_params(dt_imageio_module_format_t *self, void *params, int size)
 int bpp(dt_imageio_j2k_t *p)
 {
   return 32;
+}
+
+int levels(dt_imageio_j2k_t *p)
+{
+  // TODO: adapt as soon as this module supports various bitdepths
+  return IMAGEIO_RGB|IMAGEIO_INT12;
 }
 
 const char*

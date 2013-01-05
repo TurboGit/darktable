@@ -791,7 +791,7 @@ int dt_exif_write_blob(uint8_t *blob,uint32_t size, const char* path)
   return 1;
 }
 
-int dt_exif_read_blob(uint8_t *buf, const char* path, const int sRGB, const int imgid)
+int dt_exif_read_blob(uint8_t *buf, const char* path, const int imgid, const int sRGB, const int out_width, const int out_height)
 {
   try
   {
@@ -906,6 +906,8 @@ int dt_exif_read_blob(uint8_t *buf, const char* path, const int sRGB, const int 
          != exifData.end() )
       exifData.erase(pos);
 
+#if EXIV2_MINOR_VERSION>=23
+    // Exiv2 versions older than 0.23 drop all EXIF if the code below is executed
     // Samsung makernote cleanup, the entries below have no relevance for exported images
     if ( (pos=exifData.findKey(Exiv2::ExifKey("Exif.Samsung2.SensorAreas")))
          != exifData.end() )
@@ -952,12 +954,19 @@ int dt_exif_read_blob(uint8_t *buf, const char* path, const int sRGB, const int 
     if ( (pos=exifData.findKey(Exiv2::ExifKey("Exif.Samsung2.ToneCurve4")))
          != exifData.end() )
       exifData.erase(pos);
+#endif
 
     /* Write appropriate color space tag if using sRGB output */
     if (sRGB)
       exifData["Exif.Photo.ColorSpace"] = uint16_t(1);      /* sRGB */
     else
       exifData["Exif.Photo.ColorSpace"] = uint16_t(0xFFFF); /* Uncalibrated */
+
+    /* Replace RAW dimension with output dimensions (for example after crop/scale) */
+    if (out_width > 0)
+      exifData["Exif.Photo.PixelXDimension"] = out_width;
+    if (out_height > 0)
+      exifData["Exif.Photo.PixelYDimension"] = out_height;
 
     exifData["Exif.Image.Software"] = PACKAGE_STRING;
 
@@ -1348,7 +1357,8 @@ int dt_exif_xmp_read (dt_image_t *img, const char* filename, const int history_o
           int mprio = 0;
           if (multi_priority != xmpData.end())  mprio = multi_priority->toLong(i);
           DT_DEBUG_SQLITE3_BIND_INT(stmt_upd_hist, 9, mprio);
-          if(multi_name != xmpData.end() && multi_name->size() > 0 && multi_name->toString(i).c_str() != NULL)
+          if(multi_name != xmpData.end() && multi_name->size() > 0 &&
+             multi_name->count() > i && multi_name->toString(i).c_str() != NULL)
           {
             const char *mname = multi_name->toString(i).c_str();
             DT_DEBUG_SQLITE3_BIND_TEXT(stmt_upd_hist, 10, mname, strlen(mname), SQLITE_TRANSIENT);
@@ -1358,8 +1368,8 @@ int dt_exif_xmp_read (dt_image_t *img, const char* filename, const int history_o
             const char *mname = "0";
             DT_DEBUG_SQLITE3_BIND_TEXT(stmt_upd_hist, 10, mname, strlen(mname), SQLITE_TRANSIENT);
           }
-          
-          
+
+
           sqlite3_step (stmt_upd_hist);
           free(params);
           free(blendop_params);
@@ -1529,7 +1539,7 @@ dt_exif_xmp_read_data(Exiv2::XmpData &xmpData, const int imgid)
 
   // create an array:
   Exiv2::XmpTextValue tv("");
-  tv.setXmpArrayType(Exiv2::XmpValue::xaBag);
+  tv.setXmpArrayType(Exiv2::XmpValue::xaSeq);
   xmpData.add(Exiv2::XmpKey("Xmp.darktable.history_modversion"), &tv);
   xmpData.add(Exiv2::XmpKey("Xmp.darktable.history_enabled"), &tv);
   xmpData.add(Exiv2::XmpKey("Xmp.darktable.history_operation"), &tv);
@@ -1598,7 +1608,8 @@ dt_exif_xmp_read_data(Exiv2::XmpData &xmpData, const int imgid)
     snprintf(key, 1024, "Xmp.darktable.multi_priority[%d]", num);
     xmpData.add(Exiv2::XmpKey(key), &tv);
     const char *mname = (const char *)sqlite3_column_text(stmt, 9);
-    tv.read(mname);
+    if(mname) tv.read(mname);
+    else tv.read("");
     snprintf(key, 1024, "Xmp.darktable.multi_name[%d]", num);
     xmpData.add(Exiv2::XmpKey(key), &tv);
 

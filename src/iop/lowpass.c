@@ -365,6 +365,11 @@ commit_params (struct dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pixelpi
   d->contrast = p->contrast;
   d->saturation = p->saturation;
 
+#ifdef HAVE_OPENCL
+  if(d->radius < 0.0f)
+    piece->process_cl_ready = (piece->process_cl_ready && !(darktable.opencl->avoid_atomics));
+#endif
+
   if(fabs(d->contrast) <= 1.0f)
   {
     // linear curve for contrast up to +/- 1
@@ -440,7 +445,7 @@ void init(dt_iop_module_t *module)
   module->params = malloc(sizeof(dt_iop_lowpass_params_t));
   module->default_params = malloc(sizeof(dt_iop_lowpass_params_t));
   module->default_enabled = 0;
-  module->priority = 730; // module order created by iop_dependencies.py, do not edit!
+  module->priority = 727; // module order created by iop_dependencies.py, do not edit!
   module->params_size = sizeof(dt_iop_lowpass_params_t);
   module->gui_data = NULL;
   dt_iop_lowpass_params_t tmp = (dt_iop_lowpass_params_t)

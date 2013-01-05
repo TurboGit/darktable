@@ -532,11 +532,8 @@ static gboolean _gui_switch_view_key_accel_callback(GtkAccelGroup *accel_group,
     case DT_GUI_VIEW_SWITCH_TO_TETHERING:
       // switching to capture view using "plugins/capture/current_filmroll" as session...
       // and last used camera
-      if (dt_camctl_can_enter_tether_mode(darktable.camctl,NULL) )
-      {
-        dt_conf_set_int( "plugins/capture/mode", DT_CAPTURE_MODE_TETHERED);
-        mode = DT_CAPTURE;
-      }
+      dt_conf_set_int( "plugins/capture/mode", DT_CAPTURE_MODE_TETHERED);
+      mode = DT_CAPTURE;
       break;
 #endif
 
@@ -1503,6 +1500,19 @@ static void _ui_widget_redraw_callback(gpointer instance, GtkWidget *widget)
   gtk_widget_queue_draw(widget);
   if(i_own_lock) dt_control_gdk_unlock();
 
+}
+
+void dt_ellipsize_combo(GtkComboBox *cbox)
+{
+  GList *renderers = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(cbox));
+  GList *it = renderers;
+  while(it)
+  {
+    GtkCellRendererText *tr = GTK_CELL_RENDERER_TEXT(it->data);
+    g_object_set(G_OBJECT(tr), "ellipsize", PANGO_ELLIPSIZE_MIDDLE, (char *)NULL);
+    it = g_list_next(it);
+  }
+  g_list_free(renderers);
 }
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

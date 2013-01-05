@@ -553,6 +553,11 @@ commit_params (struct dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pixelpi
   d->compress = p->compress;
   d->shadows_ccorrect = p->shadows_ccorrect;
   d->highlights_ccorrect = p->highlights_ccorrect;
+
+#ifdef HAVE_OPENCL
+  if(d->radius < 0.0f)
+    piece->process_cl_ready = (piece->process_cl_ready && !(darktable.opencl->avoid_atomics));
+#endif
 #endif
 }
 
@@ -587,7 +592,7 @@ void init(dt_iop_module_t *module)
   module->params = malloc(sizeof(dt_iop_shadhi_params_t));
   module->default_params = malloc(sizeof(dt_iop_shadhi_params_t));
   module->default_enabled = 0;
-  module->priority = 480; // module order created by iop_dependencies.py, do not edit!
+  module->priority = 490; // module order created by iop_dependencies.py, do not edit!
   module->params_size = sizeof(dt_iop_shadhi_params_t);
   module->gui_data = NULL;
   dt_iop_shadhi_params_t tmp = (dt_iop_shadhi_params_t)

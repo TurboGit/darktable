@@ -17,26 +17,6 @@
     along with darktable.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-/*NOTE
- * 
- * old keystone values (version 2 and 3):
- *  to avoid too many slider, these values are not settable anymore
- *  but if some have been set, a entry "old keystone" is added to the keystone type combobox
- *  so you can always revert back to those values
- *  unfortunately, there is no possibility to "translate" old values in the new mechanism (it would mean drawing points outside the image)
- * 
- * 
- * Corrected bug from old version
- *  croping is not correct if the image is flipped
- */
- 
- /*TODO
-  * 
-  * Verifications needed :
-  *   - in "gui_draw_sym"
-  * 
-  */
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -166,7 +146,10 @@ typedef struct dt_iop_clipping_gui_data_t
   float old_clip_x, old_clip_y, old_clip_w, old_clip_h;
   /* last box before change */
   float prev_clip_x, prev_clip_y, prev_clip_w, prev_clip_h;
-
+  /* maximum clip box */
+  float clip_max_x, clip_max_y, clip_max_w, clip_max_h;
+  uint64_t clip_max_pipe_hash;
+  
   int k_selected, k_show, k_selected_segment;
   gboolean k_drag;
   
@@ -408,6 +391,38 @@ int distort_backtransform(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, 
   return 1;
 }
 
+static int _iop_clipping_set_max_clip (struct dt_iop_module_t *self)
+{
+  dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
+  dt_iop_clipping_params_t *p = (dt_iop_clipping_params_t *)self->params;
+      
+  if (g->clip_max_pipe_hash == self->dev->preview_pipe->backbuf_hash) return 1;
+  
+  //we want to know the size of the actual buffer
+  dt_dev_pixelpipe_iop_t *piece = dt_dev_distort_get_iop_pipe(self->dev,self->dev->preview_pipe,self);
+  if (!piece) return 0;
+  
+  float wp = piece->buf_out.width, hp = piece->buf_out.height;
+  float points[8] = {0.0,0.0,wp,hp,p->cx*wp,p->cy*hp,fabsf(p->cw)*wp,fabsf(p->ch)*hp};
+  if (!dt_dev_distort_transform_plus(self->dev, self->dev->preview_pipe, self->priority+1, 999999, points, 4)) return 0;
+  
+  g->clip_max_x = points[0]/self->dev->preview_pipe->backbuf_width;
+  g->clip_max_y = points[1]/self->dev->preview_pipe->backbuf_height;
+  g->clip_max_w = (points[2]-points[0])/self->dev->preview_pipe->backbuf_width;
+  g->clip_max_h = (points[3]-points[1])/self->dev->preview_pipe->backbuf_height;
+  
+  //if clipping values are not null, this is undistorted values...
+  g->clip_x = points[4]/self->dev->preview_pipe->backbuf_width;
+  g->clip_y = points[5]/self->dev->preview_pipe->backbuf_height;
+  g->clip_w = (points[6]-points[4])/self->dev->preview_pipe->backbuf_width;
+  g->clip_h = (points[7]-points[5])/self->dev->preview_pipe->backbuf_height;
+  g->clip_x = fmaxf(g->clip_x,g->clip_max_x);
+  g->clip_y = fmaxf(g->clip_y,g->clip_max_y);
+  g->clip_w = fminf(g->clip_w,g->clip_max_w);
+  g->clip_h = fminf(g->clip_h,g->clip_max_h);
+  g->clip_max_pipe_hash = self->dev->preview_pipe->backbuf_hash;
+  return 1;
+}
 
 // 1st pass: how large would the output be, given this input roi?
 // this is always called with the full buffer before processing.
@@ -1019,14 +1034,12 @@ void commit_params (struct dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pi
     d->k_space[1]=fabsf((d->kya+d->kyb)/2.0f);
     d->k_space[2]=fabsf((d->kxb+d->kxc)/2.0f)-d->k_space[0];
     d->k_space[3]=fabsf((d->kyc+d->kyd)/2.0f)-d->k_space[1];
-    //d->kxa = d->kxa -d->kxa; //- d->k_space[0];
-    d->kxb = d->kxb -d->kxa; //- d->k_space[0];
-    d->kxc = d->kxc -d->kxa; //- d->k_space[0];
-    d->kxd = d->kxd -d->kxa; //- d->k_space[0];
-    //d->kya = d->kya -d->kya; //- d->k_space[1];
-    d->kyb = d->kyb -d->kya; //- d->k_space[1];
-    d->kyc = d->kyc -d->kya; //- d->k_space[1];
-    d->kyd = d->kyd -d->kya; //- d->k_space[1]; 
+    d->kxb = d->kxb -d->kxa;
+    d->kxc = d->kxc -d->kxa;
+    d->kxd = d->kxd -d->kxa;
+    d->kyb = d->kyb -d->kya;
+    d->kyc = d->kyc -d->kya;
+    d->kyd = d->kyd -d->kya;
     keystone_get_matrix(d->k_space,d->kxa,d->kxb,d->kxc,d->kxd,d->kya,d->kyb,d->kyc,d->kyd,&d->a,&d->b,&d->d,&d->e,&d->g,&d->h);
     
     d->k_apply = 1;
@@ -1042,9 +1055,6 @@ void commit_params (struct dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pi
   {
     d->all_off = 1;
     d->k_apply = 0;
-    //we are setting the keystone points, so we disable flip and rotate
-    //d->angle = 0.0f;
-    //d->flags = 0;
   }
   
   
@@ -1095,6 +1105,7 @@ void gui_focus (struct dt_iop_module_t *self, gboolean in)
         keystone_type_populate(self,FALSE,0);
       }      
       commit_box (self, g, p);
+      g->clip_max_pipe_hash = 0;
     }
   }
 }
@@ -1121,8 +1132,7 @@ apply_box_aspect(dt_iop_module_t *self, int grab)
   float wd = iwd, ht = iht;
   // enforce aspect ratio.
   const float aspect = g->current_aspect;
-  // const float aspect = gtk_spin_button_get_value(g->aspect);
-  // if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g->aspect_on)))
+
   if(aspect > 0)
   {
     // if only one side changed, force aspect by two adjacent in equal parts
@@ -1178,34 +1188,34 @@ apply_box_aspect(dt_iop_module_t *self, int grab)
     }
 
     // now fix outside boxes:
-    if(clip_x < 0)
+    if(clip_x < g->clip_max_x)
     {
       double prev_clip_h = clip_h;
-      clip_h *= (clip_w + clip_x)/clip_w;
-      clip_w  =  clip_w + clip_x;
-      clip_x  = 0;
+      clip_h *= (clip_w + clip_x - g->clip_max_x)/clip_w;
+      clip_w  =  clip_w + clip_x - g->clip_max_x;
+      clip_x  = g->clip_max_x;
       if (grab & 2) clip_y += prev_clip_h - clip_h;
     }
-    if(clip_y < 0)
+    if(clip_y < g->clip_max_y)
     {
       double prev_clip_w = clip_w;
-      clip_w *= (clip_h + clip_y)/clip_h;
-      clip_h  =  clip_h + clip_y;
-      clip_y  =  0;
+      clip_w *= (clip_h + clip_y - g->clip_max_y)/clip_h;
+      clip_h  =  clip_h + clip_y - g->clip_max_y;
+      clip_y  =  g->clip_max_y;
       if (grab & 1) clip_x += prev_clip_w - clip_w;
     }
-    if(clip_x + clip_w > 1.0)
+    if(clip_x + clip_w > g->clip_max_x + g->clip_max_w)
     {
       double prev_clip_h = clip_h;
-      clip_h *= (1.0 - clip_x)/clip_w;
-      clip_w  =  1.0 - clip_x;
+      clip_h *= (g->clip_max_x + g->clip_max_w - clip_x)/clip_w;
+      clip_w  =  g->clip_max_x + g->clip_max_w - clip_x;
       if (grab & 2) clip_y += prev_clip_h - clip_h;
     }
-    if(clip_y + clip_h > 1.0)
+    if(clip_y + clip_h > g->clip_max_y + g->clip_max_h)
     {
       double prev_clip_w = clip_w;
-      clip_w *= (1.0 - clip_y)/clip_h;
-      clip_h  =  1.0 - clip_y;
+      clip_w *= (g->clip_max_y + g->clip_max_h - clip_y)/clip_h;
+      clip_h  =  g->clip_max_y + g->clip_max_h - clip_y;
       if (grab & 1) clip_x += prev_clip_w - clip_w;
     }
     g->clip_x = clip_x;
@@ -1305,9 +1315,6 @@ keystone_type_changed (GtkWidget *combo, dt_iop_module_t *self)
   {
      //if the keystone is applied,autocrop must be disabled !
      gtk_widget_set_sensitive(g->crop_auto,FALSE);
-     //and we can enable flip and rotate
-     //gtk_widget_set_sensitive(g->hvflip, TRUE);
-     //gtk_widget_set_sensitive(g->angle, TRUE);
      gtk_widget_set_sensitive(g->aspect_presets, TRUE);
      return; 
   }
@@ -1327,10 +1334,6 @@ keystone_type_changed (GtkWidget *combo, dt_iop_module_t *self)
   
   //we can enable autocrop
   gtk_widget_set_sensitive(g->crop_auto,(g->k_show == 0));
-  
-  //if we are not setting keystone, we can enable flip and rotate
-  //gtk_widget_set_sensitive(g->hvflip, (g->k_show == 0));
-  //gtk_widget_set_sensitive(g->angle, (g->k_show == 0));
   gtk_widget_set_sensitive(g->aspect_presets, (g->k_show == 0));
      
   commit_box(self,g,p);
@@ -1426,7 +1429,7 @@ void init(dt_iop_module_t *module)
   module->default_enabled = 0;
   module->params_size = sizeof(dt_iop_clipping_params_t);
   module->gui_data = NULL;
-  module->priority = 384; // module order created by iop_dependencies.py, do not edit!
+  module->priority = 381; // module order created by iop_dependencies.py, do not edit!
 }
 
 void cleanup(dt_iop_module_t *module)
@@ -1540,6 +1543,9 @@ void gui_init(struct dt_iop_module_t *self)
   g->clip_w = g->clip_h = 1.0;
   g->old_clip_x = g->old_clip_y = 0.0;
   g->old_clip_w = g->old_clip_h = 1.0;
+  g->clip_max_x = g->clip_max_y = 0.0;
+  g->clip_max_w = g->clip_max_h = 1.0;
+  g->clip_max_pipe_hash = 0;
   g->cropping = 0;
   g->straightening = 0;
   g->applied = 1;
@@ -1750,7 +1756,6 @@ void gui_post_expose(struct dt_iop_module_t *self, cairo_t *cr, int32_t width, i
   DT_CTL_GET_GLOBAL(closeup, dev_closeup);
   float zoom_scale = dt_dev_get_zoom_scale(dev, zoom, closeup ? 2 : 1, 1);
 
-  //printf("expose %f,%f %f,%f %f\n",wd,ht,zoom_x,zoom_y,zoom_scale);
   cairo_translate(cr, width/2.0, height/2.0f);
   cairo_scale(cr, zoom_scale, zoom_scale);
   cairo_translate(cr, -.5f*wd-zoom_x*wd, -.5f*ht-zoom_y*ht);
@@ -1762,13 +1767,15 @@ void gui_post_expose(struct dt_iop_module_t *self, cairo_t *cr, int32_t width, i
   dt_dev_get_pointer_zoom_pos(dev, pointerx, pointery, &pzx, &pzy);
   pzx += 0.5f;
   pzy += 0.5f;
-  cairo_set_dash (cr, &dashes, 0, 0);
-  cairo_set_source_rgba(cr, .2, .2, .2, .8);
-  cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
-  cairo_rectangle (cr, -1, -1, wd+2, ht+2);
-  cairo_rectangle (cr, g->clip_x*wd, g->clip_y*ht, g->clip_w*wd, g->clip_h*ht);
-  cairo_fill (cr);
-
+  if (_iop_clipping_set_max_clip(self))
+  {
+    cairo_set_dash (cr, &dashes, 0, 0);
+    cairo_set_source_rgba(cr, .2, .2, .2, .8);
+    cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
+    cairo_rectangle (cr, g->clip_max_x*wd-1.0f, g->clip_max_y*ht-1.0f, g->clip_max_w*wd+1.0f, g->clip_max_h*ht+1.0f);
+    cairo_rectangle (cr, g->clip_x*wd, g->clip_y*ht, g->clip_w*wd, g->clip_h*ht);
+    cairo_fill (cr);
+  }
   if(g->clip_x > .0f || g->clip_y > .0f || g->clip_w < 1.0f || g->clip_h < 1.0f)
   {
     cairo_rectangle (cr, g->clip_x*wd, g->clip_y*ht, g->clip_w*wd, g->clip_h*ht);
@@ -2204,6 +2211,7 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, int which)
   pzx += 0.5f;
   pzy += 0.5f;
   static int old_grab = -1;
+  _iop_clipping_set_max_clip(self);
   int grab = get_grab (pzx, pzy, g, 30.0/zoom_scale, wd, ht);
 
   if(darktable.control->button_down && darktable.control->button_down_which == 3 && g->k_show != 1)
@@ -2324,8 +2332,8 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, int which)
       if(grab == 15)
       {
         /* moving the crop window */
-        g->clip_x = fminf(1.0 - g->clip_w, fmaxf(0.0, g->handle_x + pzx - bzx));
-        g->clip_y = fminf(1.0 - g->clip_h, fmaxf(0.0, g->handle_y + pzy - bzy));
+        g->clip_x = fminf(g->clip_max_w + g->clip_max_x - g->clip_w, fmaxf(g->clip_max_x, g->handle_x + pzx - bzx));
+        g->clip_y = fminf(g->clip_max_h + g->clip_max_y - g->clip_h, fmaxf(g->clip_max_y, g->handle_y + pzy - bzy));
       }
       else
       {
@@ -2361,21 +2369,21 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, int which)
           if(grab & 1)
           {
             const float old_clip_x = g->clip_x;
-            g->clip_x = fmaxf(0.0, pzx - g->handle_x);
+            g->clip_x = fmaxf(g->clip_max_x, pzx - g->handle_x);
             g->clip_w = fmaxf(0.1, old_clip_x + g->clip_w - g->clip_x);
           }
           if(grab & 2)
           {
             const float old_clip_y = g->clip_y;
-            g->clip_y = fmaxf(0.0, pzy - g->handle_y);
+            g->clip_y = fmaxf(g->clip_max_y, pzy - g->handle_y);
             g->clip_h = fmaxf(0.1, old_clip_y + g->clip_h - g->clip_y);
           }
-          if(grab & 4) g->clip_w = fmaxf(0.1, fminf(1.0, pzx - g->clip_x - g->handle_x));
-          if(grab & 8) g->clip_h = fmaxf(0.1, fminf(1.0, pzy - g->clip_y - g->handle_y));
+          if(grab & 4) g->clip_w = fmaxf(0.1, fminf(g->clip_max_w + g->clip_max_x, pzx - g->clip_x - g->handle_x));
+          if(grab & 8) g->clip_h = fmaxf(0.1, fminf(g->clip_max_h + g->clip_max_y, pzy - g->clip_y - g->handle_y));
         }
 
-        if(g->clip_x + g->clip_w > 1.0) g->clip_w = 1.0 - g->clip_x;
-        if(g->clip_y + g->clip_h > 1.0) g->clip_h = 1.0 - g->clip_y;
+        if(g->clip_x + g->clip_w > g->clip_max_w + g->clip_max_x) g->clip_w = g->clip_max_w + g->clip_max_x - g->clip_x;
+        if(g->clip_y + g->clip_h > g->clip_max_h + g->clip_max_y) g->clip_h = g->clip_max_h + g->clip_max_y - g->clip_y;
       }
       apply_box_aspect(self, grab);
     }
@@ -2456,11 +2464,21 @@ commit_box (dt_iop_module_t *self, dt_iop_clipping_gui_data_t *g, dt_iop_clippin
     p->cx = p->cy = 0.0f;
     p->cw = p->ch = 1.0f;
   }
-  p->cx = g->clip_x;
-  p->cy = g->clip_y;
-  p->cw = copysignf(p->cx + g->clip_w, p->cw);
-  p->ch = copysignf(p->cy + g->clip_h, p->ch);
-  
+  //we want value in iop space
+  float wd = self->dev->preview_pipe->backbuf_width;
+  float ht = self->dev->preview_pipe->backbuf_height;
+  float points[4] = {g->clip_x*wd,g->clip_y*ht,(g->clip_x+g->clip_w)*wd,(g->clip_y+g->clip_h)*ht};
+  if (dt_dev_distort_backtransform_plus(self->dev,self->dev->preview_pipe,self->priority+1,9999999,points,2))
+  {
+    dt_dev_pixelpipe_iop_t *piece = dt_dev_distort_get_iop_pipe(self->dev,self->dev->preview_pipe,self);
+    if (piece)
+    {
+      p->cx = points[0]/(float)piece->buf_out.width;
+      p->cy = points[1]/(float)piece->buf_out.height;
+      p->cw = copysignf(points[2]/(float)piece->buf_out.width, p->cw);
+      p->ch = copysignf(points[3]/(float)piece->buf_out.height, p->ch);
+    }
+  }
   if(self->off) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->off), 1);
   g->applied = 1;
   dt_dev_add_history_item(darktable.develop, self, TRUE);
@@ -2518,8 +2536,6 @@ int button_pressed(struct dt_iop_module_t *self, double x, double y, int which, 
       else//if we click to the apply button
       {
         int32_t zoom, closeup;
-        //float wd = self->dev->preview_pipe->backbuf_width;
-        //float ht = self->dev->preview_pipe->backbuf_height;
         DT_CTL_GET_GLOBAL(zoom, dev_zoom);
         DT_CTL_GET_GLOBAL(closeup, dev_closeup);
         float zoom_scale = dt_dev_get_zoom_scale(self->dev, zoom, closeup ? 2 : 1, 1);
@@ -2528,13 +2544,13 @@ int button_pressed(struct dt_iop_module_t *self, double x, double y, int which, 
         pzx += 0.5f;
         pzy += 0.5f;
         
-        
-        //float pts[2] = {pzx*self->dev->preview_pipe->backbuf_width,pzy*self->dev->preview_pipe->backbuf_height};
-        //dt_dev_distort_backtransform(self->dev,pts,1);
-        //float xx=pts[0]/self->dev->preview_pipe->iwidth, yy=pts[1]/self->dev->preview_pipe->iheight;
         float iwd = self->dev->preview_pipe->iwidth;
         float iht = self->dev->preview_pipe->iheight;
         float pts[8] = {p->kxa*iwd, p->kya*iht, p->kxb*iwd, p->kyb*iht, p->kxc*iwd, p->kyc*iht, p->kxd*iwd, p->kyd*iht};
+        dt_dev_distort_transform(self->dev,pts,4);
+        float xx=pzx*self->dev->preview_pipe->backbuf_width, yy=pzy*self->dev->preview_pipe->backbuf_height;
+        float c[2] = {(MIN(pts[4],pts[2])+MAX(pts[0],pts[6]))/2.0f, (MIN(pts[5],pts[7])+MAX(pts[1],pts[3]))/2.0f};
+        float ext = 10.0/(zoom_scale);
         dt_dev_distort_transform(self->dev,pts,4);
         float xx=pzx*self->dev->preview_pipe->backbuf_width, yy=pzy*self->dev->preview_pipe->backbuf_height;
         float c[2] = {(MIN(pts[4],pts[2])+MAX(pts[0],pts[6]))/2.0f, (MIN(pts[5],pts[7])+MAX(pts[1],pts[3]))/2.0f};
@@ -2641,8 +2657,6 @@ void init_key_accels(dt_iop_module_so_t *self)
   dt_accel_register_iop(self, TRUE, NC_("accel", "commit"),
                         GDK_Return, 0);
   dt_accel_register_slider_iop(self, FALSE, NC_("accel", "angle"));
-  //dt_accel_register_slider_iop(self, FALSE, NC_("accel", "keystone h"));
-  //dt_accel_register_slider_iop(self, FALSE, NC_("accel", "keystone v"));
 }
 
 void connect_key_accels(dt_iop_module_t *self)
@@ -2655,8 +2669,6 @@ void connect_key_accels(dt_iop_module_t *self)
   dt_accel_connect_iop(self, "commit", closure);
 
   dt_accel_connect_slider_iop(self, "angle", GTK_WIDGET(g->angle));
-  //dt_accel_connect_slider_iop(self, "keystone h", GTK_WIDGET(g->keystone_h));
-  //dt_accel_connect_slider_iop(self, "keystone v", GTK_WIDGET(g->keystone_v));
 }
 
 #undef PHI

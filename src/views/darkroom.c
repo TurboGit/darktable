@@ -159,6 +159,7 @@ void expose(dt_view_t *self, cairo_t *cri, int32_t width_i, int32_t height_i, in
     image_surface_height = height;
     if(image_surface) cairo_surface_destroy(image_surface);
     image_surface = cairo_image_surface_create(CAIRO_FORMAT_RGB24, width, height);
+    image_surface_imgid = -1; // invalidate old stuff
   }
   cairo_surface_t *surface;
   cairo_t *cr = cairo_create(image_surface);
@@ -522,7 +523,7 @@ dt_dev_change_image(dt_develop_t *dev, const uint32_t imgid)
 
   // make sure no signals propagate here:
   darktable.gui->reset = 1;
-  
+
   GList *modules = g_list_last(dev->iop);
   int nb_iop = g_list_length(dev->iop);
   dt_dev_pixelpipe_cleanup_nodes(dev->pipe);
@@ -541,11 +542,11 @@ dt_dev_change_image(dt_develop_t *dev, const uint32_t imgid)
       {
         gtk_container_remove (GTK_CONTAINER(dt_ui_get_container(darktable.gui->ui, DT_UI_CONTAINER_PANEL_RIGHT_CENTER)),module->expander);
         dt_iop_gui_cleanup_module(module);
-      }  
+      }
 
       //we remove the module from the list
       dev->iop = g_list_remove_link(dev->iop,g_list_nth(dev->iop,i));
-  
+
       //we cleanup the module
       dt_accel_disconnect_list(module->accel_closures);
       dt_accel_cleanup_locals_iop(module);
@@ -557,7 +558,7 @@ dt_dev_change_image(dt_develop_t *dev, const uint32_t imgid)
   dt_dev_pixelpipe_create_nodes(dev->pipe, dev);
   dt_dev_pixelpipe_create_nodes(dev->preview_pipe, dev);
   dt_dev_read_history(dev);
-  
+
   //we have to init all module instances other than "base" instance
   modules = dev->iop;
   while(modules)
@@ -587,31 +588,31 @@ dt_dev_change_image(dt_develop_t *dev, const uint32_t imgid)
           pos++;
         }
         if (!base) continue;
-        
+
         /* add module to right panel */
         GtkWidget *expander = dt_iop_gui_get_expander(module);
         dt_ui_container_add_widget(darktable.gui->ui,
                                    DT_UI_CONTAINER_PANEL_RIGHT_CENTER, expander);
-        GValue gv = G_VALUE_INIT;
+        GValue gv = { 0, { { 0 } } };
         g_value_init(&gv,G_TYPE_INT);
         gtk_container_child_get_property(GTK_CONTAINER(dt_ui_get_container(darktable.gui->ui, DT_UI_CONTAINER_PANEL_RIGHT_CENTER)),base->expander,"position",&gv);
         gtk_box_reorder_child (dt_ui_get_container(darktable.gui->ui, DT_UI_CONTAINER_PANEL_RIGHT_CENTER),expander,g_value_get_int(&gv)+pos_base-pos_module);
         dt_iop_gui_set_expanded(module, TRUE);
         dt_iop_gui_update_blending(module);
       }
-    
+
       /* setup key accelerators */
       module->accel_closures = NULL;
       if(module->connect_key_accels)
         module->connect_key_accels(module);
       dt_iop_connect_common_accels(module);
-      
+
       //we update show params for multi-instances for each other instances
       dt_dev_modules_update_multishow(module->dev);
     }
     modules = g_list_next(modules);
   }
-    
+
   dt_dev_pop_history_items(dev, dev->history_end);
 
   if(active_plugin)
@@ -663,7 +664,6 @@ static void _view_darkroom_filmstrip_activate_callback(gpointer instance,gpointe
 static void
 dt_dev_jump_image(dt_develop_t *dev, int diff)
 {
-  char query[1024];
   const gchar *qin = dt_collection_get_query (darktable.collection);
   int offset = 0;
   if(qin)
@@ -676,14 +676,7 @@ dt_dev_jump_image(dt_develop_t *dev, int diff)
       orig_imgid = sqlite3_column_int(stmt, 0);
     sqlite3_finalize(stmt);
 
-    snprintf(query, 1024, "select rowid from (%s) where id=?3", qin);
-    DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), query, -1, &stmt, NULL);
-    DT_DEBUG_SQLITE3_BIND_INT(stmt, 1,  0);
-    DT_DEBUG_SQLITE3_BIND_INT(stmt, 2, -1);
-    DT_DEBUG_SQLITE3_BIND_INT(stmt, 3, orig_imgid);
-    if(sqlite3_step(stmt) == SQLITE_ROW)
-      offset = sqlite3_column_int(stmt, 0) - 1;
-    sqlite3_finalize(stmt);
+    offset = dt_collection_image_offset (orig_imgid);
 
     DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), qin, -1, &stmt, NULL);
     DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, offset + diff);
@@ -776,7 +769,8 @@ export_key_accel_callback(GtkAccelGroup *accel_group,
   int format_index = dt_conf_get_int ("plugins/lighttable/export/format");
   int storage_index = dt_conf_get_int ("plugins/lighttable/export/storage");
   gboolean high_quality = dt_conf_get_bool("plugins/lighttable/export/high_quality_processing");
-  dt_control_export(max_width, max_height, format_index, storage_index, high_quality);
+  char *style = dt_conf_get_string("plugins/lighttable/export/style");
+  dt_control_export(max_width, max_height, format_index, storage_index, high_quality, style);
   return TRUE;
 }
 

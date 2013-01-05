@@ -39,10 +39,12 @@
 #include "common/imageio_rawspeed.h"
 #include "common/image_compression.h"
 #include "common/mipmap_cache.h"
+#include "common/styles.h"
 #include "control/control.h"
 #include "control/conf.h"
 #include "develop/develop.h"
 #include "develop/imageop.h"
+#include "develop/blend.h"
 #include "iop/colorout.h"
 #include "libraw/libraw.h"
 
@@ -528,7 +530,7 @@ int dt_imageio_export_with_flags(
   dt_times_t start;
   dt_get_times(&start);
   dt_dev_pixelpipe_t pipe;
-  res = thumbnail_export ? dt_dev_pixelpipe_init_thumbnail(&pipe, wd, ht) : dt_dev_pixelpipe_init_export(&pipe, wd, ht);
+  res = thumbnail_export ? dt_dev_pixelpipe_init_thumbnail(&pipe, wd, ht) : dt_dev_pixelpipe_init_export(&pipe, wd, ht, format->levels(format_params));
   if(!res)
   {
     dt_control_log(_("failed to allocate memory for export, please lower the threads used for export or buy more memory."));
@@ -543,6 +545,55 @@ int dt_imageio_export_with_flags(
     dt_mipmap_cache_read_release(darktable.mipmap_cache, &buf);
     dt_dev_cleanup(&dev);
     return 1;
+  }
+
+  //  If a style is to be applied during export, add the iop params into the history
+  if (!thumbnail_export && strlen(format_params->style) && strcmp(format_params->style,_("none")))
+  {
+    GList *stls;
+
+    GList *modules = dev.iop;
+    dt_iop_module_t *m = NULL;
+
+    if ((stls=dt_styles_get_item_list(format_params->style, TRUE)) == 0)
+    {
+      dt_control_log(_("cannot find the style '%s' to apply during export."), format_params->style);
+      dt_dev_cleanup(&dev);
+      dt_mipmap_cache_read_release(darktable.mipmap_cache, &buf);
+      return 1;
+    }
+
+    //  Add each params
+    while (stls)
+    {
+      dt_style_item_t *s = (dt_style_item_t *) stls->data;
+
+      modules = dev.iop;
+      while (modules)
+      {
+        m = (dt_iop_module_t *)modules->data;
+
+        if (strcmp(m->op, s->name) == 0)
+        {
+          dt_dev_history_item_t *h = malloc(sizeof(dt_dev_history_item_t));
+
+          h->params = s->params;
+          h->enabled = 1;
+          h->module = m;
+          h->multi_priority = 1;
+          strcpy(h->multi_name, "");
+
+          h->blend_params = malloc(sizeof(dt_develop_blend_params_t));
+          memset(h->blend_params, 0, sizeof(dt_develop_blend_params_t));
+
+          dev.history_end++;
+          dev.history = g_list_append(dev.history, h);
+          break;
+        }
+        modules = g_list_next(modules);
+      }
+      stls = g_list_next(stls);
+    }
   }
 
   dt_dev_pixelpipe_set_input(&pipe, &dev, (float *)buf.buf, buf.width, buf.height, 1.0);
@@ -593,11 +644,11 @@ int dt_imageio_export_with_flags(
                                       high_quality;
   const int width  = high_quality_processing ? 0 : format_params->max_width;
   const int height = high_quality_processing ? 0 : format_params->max_height;
-  const float scalex = width  > 0 ? fminf(width /(float)pipe.processed_width,  1.0) : 1.0;
-  const float scaley = height > 0 ? fminf(height/(float)pipe.processed_height, 1.0) : 1.0;
-  const float scale = fminf(scalex, scaley);
-  int processed_width  = scale*pipe.processed_width;
-  int processed_height = scale*pipe.processed_height;
+  const double scalex = width  > 0 ? fminf(width /(double)pipe.processed_width,  1.0) : 1.0;
+  const double scaley = height > 0 ? fminf(height/(double)pipe.processed_height, 1.0) : 1.0;
+  const double scale = fminf(scalex, scaley);
+  int processed_width  = scale*pipe.processed_width  + .5f;
+  int processed_height = scale*pipe.processed_height + .5f;
   const int bpp = format->bpp(format_params);
 
   // downsampling done last, if high quality processing was requested:
@@ -606,9 +657,9 @@ int dt_imageio_export_with_flags(
   if(high_quality_processing)
   {
     dt_dev_pixelpipe_process_no_gamma(&pipe, &dev, 0, 0, processed_width, processed_height, scale);
-    const float scalex = format_params->max_width  > 0 ? fminf(format_params->max_width /(float)pipe.processed_width,  1.0) : 1.0;
-    const float scaley = format_params->max_height > 0 ? fminf(format_params->max_height/(float)pipe.processed_height, 1.0) : 1.0;
-    const float scale = fminf(scalex, scaley);
+    const double scalex = format_params->max_width  > 0 ? fminf(format_params->max_width /(double)pipe.processed_width,  1.0) : 1.0;
+    const double scaley = format_params->max_height > 0 ? fminf(format_params->max_height/(double)pipe.processed_height, 1.0) : 1.0;
+    const double scale = fminf(scalex, scaley);
     processed_width  = scale*pipe.processed_width  + .5f;
     processed_height = scale*pipe.processed_height + .5f;
     moutbuf = (uint8_t *)dt_alloc_align(64, sizeof(float)*processed_width*processed_height*4);
@@ -690,7 +741,7 @@ int dt_imageio_export_with_flags(
     uint8_t exif_profile[65535]; // C++ alloc'ed buffer is uncool, so we waste some bits here.
     char pathname[1024];
     dt_image_full_path(imgid, pathname, 1024);
-    length = dt_exif_read_blob(exif_profile, pathname, sRGB, imgid);
+    length = dt_exif_read_blob(exif_profile, pathname, imgid, sRGB, processed_width, processed_height);
 
     res = format->write_image (format_params, filename, outbuf, exif_profile, length, imgid);
   }

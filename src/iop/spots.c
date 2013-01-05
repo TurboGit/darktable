@@ -94,7 +94,7 @@ groups ()
   return IOP_GROUP_CORRECT;
 }
 
-int
+static void gui_spot_add(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
 legacy_params (dt_iop_module_t *self, const void *const old_params, const int old_version, void *new_params, const int new_version)
 {
   if(old_version == 1 && new_version == 2)
@@ -357,7 +357,7 @@ void init(dt_iop_module_t *module)
   // our module is disabled by default
   // by default:
   module->default_enabled = 0;
-  module->priority = 192; // module order created by iop_dependencies.py, do not edit!
+  module->priority = 200; // module order created by iop_dependencies.py, do not edit!
   module->params_size = sizeof(dt_iop_spots_params_t);
   module->gui_data = NULL;
   // init defaults:
@@ -517,59 +517,64 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 5.0/zoom_scale);
       else                                     cairo_set_line_width(cr, 3.0/zoom_scale);
       cairo_set_source_rgba(cr, .3, .3, .3, .8);
-      if (g->dragging == i && g->hoover_c)
+    if (g->dragging == i && g->hoover_c)
+    {
+      src_x = p->spot[i].xc*wd;
+      src_y = p->spot[i].yc*ht;
+      float dx = src_x - gspt.source[0], dy = src_y - gspt.source[1];
+      cairo_move_to(cr,gspt.source[2]+dx,gspt.source[3]+dy);
+      for (int i=2; i<gspt.pts_count; i++)
       {
-        src_x = pzx*wd;
-        src_y = pzy*ht;
-        cairo_arc (cr, src_x, src_y, 10.0, 0, 2.0*M_PI);
+        cairo_line_to(cr,gspt.source[i*2]+dx,gspt.source[i*2+1]+dy);
       }
-      else
-      {
-        cairo_move_to(cr,gspt.source[2],gspt.source[3]);
-        for (int i=2; i<gspt.source_count; i++)
-        {
-          cairo_line_to(cr,gspt.source[i*2],gspt.source[i*2+1]);
-        }
-        cairo_line_to(cr,gspt.source[2],gspt.source[3]);
-        src_x = gspt.source[0];
-        src_y = gspt.source[1];
-      }
-      cairo_stroke_preserve(cr);
-      if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
-      else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
-      cairo_set_source_rgba(cr, .8, .8, .8, .8);
-      cairo_stroke(cr);
+      cairo_line_to(cr,gspt.source[2]+dx,gspt.source[3]+dy);
     }
-    
-    //source border
-    if (p->spot[i].version > 1 && gspt.source_border_count > 6)
-    { 
-      cairo_set_dash(cr, dashed, len, 0);     
-      if(g->border && (i == g->selected || i == g->dragging)) cairo_set_line_width(cr, 1.0/zoom_scale);
-      else                                     cairo_set_line_width(cr, 0.5/zoom_scale);
-      cairo_set_source_rgba(cr, .3, .3, .3, .8);
-      if (g->dragging == i && g->hoover_c)
+    else
+    {
+      cairo_move_to(cr,gspt.source[2],gspt.source[3]);
+      for (int i=2; i<gspt.pts_count; i++)
       {
-        //we don't draw any border
+        cairo_line_to(cr,gspt.source[i*2],gspt.source[i*2+1]);
       }
-      else
-      {
-        cairo_move_to(cr,gspt.source_border[2],gspt.source_border[3]);
-        for (int i=2; i<gspt.source_border_count; i++)
-        {
-          cairo_line_to(cr,gspt.source_border[i*2],gspt.source_border[i*2+1]);
-        }
-        cairo_line_to(cr,gspt.source_border[2],gspt.source_border[3]);
-      }
-      cairo_stroke_preserve(cr);
-      cairo_set_dash(cr, dashed, len, 4);
-      if(g->border && (i == g->selected || i == g->dragging)) cairo_set_line_width(cr, 1.0/zoom_scale);
-      else                                     cairo_set_line_width(cr, 0.5/zoom_scale);
-      cairo_set_source_rgba(cr, .8, .8, .8, .8); 
-      cairo_stroke(cr);
+      cairo_line_to(cr,gspt.source[2],gspt.source[3]);
+      src_x = gspt.source[0];
+      src_y = gspt.source[1];
     }
+    cairo_stroke_preserve(cr);
+    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
+    cairo_set_source_rgba(cr, .8, .8, .8, .8);
+    cairo_stroke(cr);
     
     //spot
+    cairo_set_line_cap(cr,CAIRO_LINE_CAP_ROUND);
+    if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 5.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 3.0/zoom_scale);
+    cairo_set_source_rgba(cr, .3, .3, .3, .8);
+    if (g->dragging == i && !g->hoover_c)
+    {
+      spt_x = p->spot[i].x*wd;
+      spt_y = p->spot[i].y*ht;
+      float dx = spt_x - gspt.spot[0], dy = spt_y - gspt.spot[1];
+      cairo_move_to(cr,gspt.spot[2]+dx,gspt.spot[3]+dy);
+      for (int i=2; i<gspt.pts_count; i++)
+      {
+        cairo_line_to(cr,gspt.spot[i*2]+dx,gspt.spot[i*2+1]+dy);
+      }
+      cairo_line_to(cr,gspt.spot[2]+dx,gspt.spot[3]+dy);
+    }
+    else
+    {
+      cairo_move_to(cr,gspt.spot[2],gspt.spot[3]);
+      for (int i=2; i<gspt.pts_count; i++)
+      {
+        cairo_line_to(cr,gspt.spot[i*2],gspt.spot[i*2+1]);
+      }
+      cairo_line_to(cr,gspt.spot[2],gspt.spot[3]);
+      spt_x = gspt.spot[0];
+      spt_y = gspt.spot[1];
+    }
+    cairo_stroke_preserve(cr);
     if (gspt.spot_count > 6)
     {
       cairo_set_dash(cr, dashed, 0,0);
@@ -597,7 +602,7 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
       else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
       cairo_set_source_rgba(cr, .8, .8, .8, .8);
-      cairo_stroke(cr);
+    cairo_stroke(cr);
     }
     
     //line between
@@ -721,6 +726,11 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   if(which == 1)
   {
+    float pzx, pzy;
+    dt_dev_get_pointer_zoom_pos(self->dev, x, y, &pzx, &pzy);
+    pzx += 0.5f;
+    pzy += 0.5f;
+
     if(g->selected < 0)
     {
       if(p->num_spots == 32)
@@ -728,10 +738,7 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
         dt_control_log(_("spot removal only supports up to 32 spots"));
         return 1;
       }
-      float pzx, pzy;
-      dt_dev_get_pointer_zoom_pos(self->dev, x, y, &pzx, &pzy);
-      pzx += 0.5f;
-      pzy += 0.5f;
+      
       const int i = p->num_spots++;
       g->dragging = i;
       // on *wd|*ht scale, radius on *min(wd, ht).
@@ -753,6 +760,16 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
     else
     {
       g->dragging = g->selected;
+      if (g->hoover_c)
+      {
+        p->spot[g->selected].xc = pzx;
+        p->spot[g->selected].yc = pzy;
+      }
+      else
+      {
+        p->spot[g->selected].x = pzx;
+        p->spot[g->selected].y = pzy;
+      }
     }
     return 1;
   }

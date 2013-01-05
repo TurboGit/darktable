@@ -522,15 +522,7 @@ gui_init (dt_imageio_module_storage_t *self)
   GtkWidget *albumlist=gtk_hbox_new(FALSE,0);
   ui->comboBox1=GTK_COMBO_BOX( gtk_combo_box_new_text()); // Available albums
 
-  GList *renderers = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(ui->comboBox1));
-  GList *it = renderers;
-  while(it)
-  {
-    GtkCellRendererText *tr = GTK_CELL_RENDERER_TEXT(it->data);
-    g_object_set(G_OBJECT(tr), "ellipsize", PANGO_ELLIPSIZE_MIDDLE, (char *)NULL);
-    it = g_list_next(it);
-  }
-  g_list_free(renderers);
+  dt_ellipsize_combo(ui->comboBox1);
 
   ui->dtbutton1 = DTGTK_BUTTON( dtgtk_button_new(dtgtk_cairo_paint_refresh,0) );
   g_object_set(G_OBJECT(ui->dtbutton1), "tooltip-text", _("refresh album list"), (char *)NULL);
@@ -683,13 +675,16 @@ store (dt_imageio_module_data_t *sdata, const int imgid, dt_imageio_module_forma
 #ifdef _OPENMP
   #pragma omp critical
 #endif
-//TODO: Check if this could be done in threads, so we enhace export time by using
-//      upload time for one image to export another image to disk.
-  // Upload image
-  // Do we export tags?
-  if( p->export_tags == TRUE )
-    tags = imgid;
-  photo_status = _flickr_api_upload_photo( p, fname, caption, description, tags );
+  {
+    //TODO: Check if this could be done in threads, so we enhace export time by using
+    //      upload time for one image to export another image to disk.
+    // Upload image
+    // Do we export tags?
+    if( p->export_tags == TRUE )
+      tags = imgid;
+    photo_status = _flickr_api_upload_photo( p, fname, caption, description, tags );
+  }
+
   if( !photo_status )
   {
     result=0;
