@@ -27,7 +27,7 @@ int _circle_get_points(dt_develop_t *dev, float x, float y, float radius, float 
   float ht = dev->preview_pipe->iheight;
 
   //how many points do we need ?
-  float r = radius*wd;
+  float r = radius*MIN(wd,ht);
   int l = (int) (2.0*M_PI*r);
   
   //buffer allocations
@@ -66,7 +66,7 @@ int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, floa
 
 int dt_masks_circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, int *width, int *height, int *posx, int *posy)
 {  
-  float r = (circle.radius + circle.border)*wd;
+  float r = (circle.radius + circle.border)*MIN(wd,ht);
   int l = (int) (2.0*M_PI*r);
   //buffer allocations
   float *points = malloc(2*(l+1)*sizeof(float)); 
@@ -127,8 +127,8 @@ int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, 
   
   //we populate the buffer
   float center[2] = {circle.center[0]*wd, circle.center[1]*ht};
-  float radius2 = circle.radius*wd*circle.radius*wd;
-  float total2 = (circle.radius+circle.border)*wd*(circle.radius+circle.border)*wd;
+  float radius2 = circle.radius*MIN(wd,ht)*circle.radius*MIN(wd,ht);
+  float total2 = (circle.radius+circle.border)*MIN(wd,ht)*(circle.radius+circle.border)*MIN(wd,ht);
   for (int i=0; i<h; i++)
     for (int j=0; j<w; j++)
     {

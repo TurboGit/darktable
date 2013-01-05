@@ -94,8 +94,7 @@ groups ()
   return IOP_GROUP_CORRECT;
 }
 
-static void gui_spot_add(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
-legacy_params (dt_iop_module_t *self, const void *const old_params, const int old_version, void *new_params, const int new_version)
+int legacy_params (dt_iop_module_t *self, const void *const old_params, const int old_version, void *new_params, const int new_version)
 {
   if(old_version == 1 && new_version == 2)
   {
@@ -149,7 +148,7 @@ static void gui_spot_add(dt_iop_module_t *self, spot_draw_t *gspt, int spot_inde
     {
       if (p->spot[spot_index].version > 1)
       {
-        if (dt_masks_circle_get_border(dev,p->spot[spot_index].source, &gspt->source_border, &gspt->source_border_count,dx,dy))
+        if (dt_masks_circle_get_border(dev,p->spot[spot_index].spot, &gspt->source_border, &gspt->source_border_count,dx,dy))
         {
           gspt->ok = 1;
         }
@@ -222,7 +221,7 @@ static void gui_spot_update_spot(dt_iop_module_t *self, spot_draw_t *gspt, int s
   dt_develop_t *dev = self->dev;
   dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
   
-  if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->spot, &gspt->spot_count))
+  if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->spot, &gspt->spot_count,0,0))
   {
     return;
   }
@@ -318,7 +317,7 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
       const int y  = (d->spot[i].spot.center[1] *piece->buf_in.height)/scale - roi_in->y;
       const int xc = (d->spot[i].source[0]*piece->buf_in.width)/scale - roi_in->x;
       const int yc = (d->spot[i].source[1]*piece->buf_in.height)/scale - roi_in->y;      
-      const int rad = d->spot[i].source.radius* MIN(piece->buf_in.width, piece->buf_in.height)/scale;
+      const int rad = d->spot[i].spot.radius* MIN(piece->buf_in.width, piece->buf_in.height)/scale;
       const int um = MIN(rad, MIN(x, xc));
       const int uM = MIN(rad, MIN(roi_in->width-1-xc, roi_in->width-1-x));
       const int vm = MIN(rad, MIN(y, yc));
@@ -525,7 +524,7 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
         src_y = p->spot[i].source[1]*ht;
         float dx = src_x - gspt.source[0], dy = src_y - gspt.source[1];
         cairo_move_to(cr,gspt.source[2]+dx,gspt.source[3]+dy);
-        for (int i=2; i<gspt.pts_count; i++)
+        for (int i=2; i<gspt.source_count; i++)
         {
           cairo_line_to(cr,gspt.source[i*2]+dx,gspt.source[i*2+1]+dy);
         }
@@ -534,7 +533,7 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       else
       {
         cairo_move_to(cr,gspt.source[2],gspt.source[3]);
-        for (int i=2; i<gspt.pts_count; i++)
+        for (int i=2; i<gspt.source_count; i++)
         {
           cairo_line_to(cr,gspt.source[i*2],gspt.source[i*2+1]);
         }
@@ -550,7 +549,7 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
     }
 
     //border
-    if (gspt.border_count > 6)
+    if (gspt.source_border_count > 6)
     { 
       cairo_set_dash(cr, dashed, len, 0);     
       if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
@@ -562,12 +561,12 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       }
       else
       {
-        cairo_move_to(cr,gspt.border[2],gspt.border[3]);
-        for (int i=2; i<gspt.border_count; i++)
+        cairo_move_to(cr,gspt.source_border[2],gspt.source_border[3]);
+        for (int i=2; i<gspt.source_border_count; i++)
         {
-          cairo_line_to(cr,gspt.border[i*2],gspt.border[i*2+1]);
+          cairo_line_to(cr,gspt.source_border[i*2],gspt.source_border[i*2+1]);
         }
-        cairo_line_to(cr,gspt.border[2],gspt.border[3]);
+        cairo_line_to(cr,gspt.source_border[2],gspt.source_border[3]);
       }
       cairo_stroke_preserve(cr);
       if(i == g->selected || i == g->dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
@@ -590,7 +589,7 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
         spt_y = p->spot[i].spot.center[1]*ht;
         float dx = spt_x - gspt.spot[0], dy = spt_y - gspt.spot[1];
         cairo_move_to(cr,gspt.spot[2]+dx,gspt.spot[3]+dy);
-        for (int i=2; i<gspt.pts_count; i++)
+        for (int i=2; i<gspt.spot_count; i++)
         {
           cairo_line_to(cr,gspt.spot[i*2]+dx,gspt.spot[i*2+1]+dy);
         }
