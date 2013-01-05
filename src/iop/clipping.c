@@ -701,7 +701,7 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
   const int ch_width = ch*roi_in->width;
 
   assert(ch == 4);
-     printf("clipn %f %d %d   %d %d\n",roi_in->scale,piece->buf_in.width, piece->buf_in.height, piece->pipe->iwidth, piece->pipe->iheight);
+
   // only crop, no rot fast and sharp path:
   if(!d->flags && d->angle == 0.0 && d->all_off && roi_in->width == roi_out->width && roi_in->height == roi_out->height)
   {
@@ -789,7 +789,6 @@ process_cl (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, cl_mem 
   const int width = roi_out->width;
   const int height = roi_out->height;
 
-  printf("clip %f %d %d   %d %d\n",roi_in->scale,piece->buf_in.width, piece->buf_in.height, piece->pipe->iwidth, piece->pipe->iheight);
   // only crop, no rot fast and sharp path:
   if(!d->flags && d->angle == 0.0 && d->all_off && roi_in->width == roi_out->width && roi_in->height == roi_out->height)
   {

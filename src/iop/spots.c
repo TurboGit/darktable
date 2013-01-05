@@ -401,15 +401,15 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
     else
     {
       // convert from world space:
-      const int x  = (d->spot[i].spot.center[0] *piece->buf_in.width)/scale - roi_in->x;
-      const int y  = (d->spot[i].spot.center[1] *piece->buf_in.height)/scale - roi_in->y;
-      const int xc = (d->spot[i].source[0]*piece->buf_in.width)/scale - roi_in->x;
-      const int yc = (d->spot[i].source[1]*piece->buf_in.height)/scale - roi_in->y;      
+      const int posx  = (d->spot[i].spot.center[0] *piece->buf_in.width)/scale;
+      const int posy  = (d->spot[i].spot.center[1] *piece->buf_in.height)/scale;
+      const int posx_source = (d->spot[i].source[0]*piece->buf_in.width)/scale;
+      const int posy_source = (d->spot[i].source[1]*piece->buf_in.height)/scale;      
       const int rad = d->spot[i].spot.radius* MIN(piece->buf_in.width, piece->buf_in.height)/scale;
-      const int um = MIN(rad, MIN(x, xc));
-      const int uM = MIN(rad, MIN(roi_in->width-1-xc, roi_in->width-1-x));
-      const int vm = MIN(rad, MIN(y, yc));
-      const int vM = MIN(rad, MIN(roi_in->height-1-yc, roi_in->height-1-y));
+      //const int um = -MIN(rad, MIN(x, xc));
+      //const int uM = MIN(rad, MIN(roi_in->width-1-xc, roi_in->width-1-x));
+      //const int vm = -MIN(rad, MIN(y, yc));
+      //const int vM = MIN(rad, MIN(roi_in->height-1-yc, roi_in->height-1-y));
       float filter[2*rad + 1];
       // for(int k=-rad; k<=rad; k++) filter[rad + k] = expf(-k*k*2.f/(rad*rad));
       if(rad > 0)
@@ -424,13 +424,14 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
       {
         filter[0] = 1.0f;
       }
-      for(int u=-um; u<=uM; u++) for(int v=-vm; v<=vM; v++)
+      for (int yy=t ; yy<t+h; yy++)
+        for (int xx=l ; xx<l+w; xx++)
         {
-          const float f = filter[rad+u]*filter[rad+v]*d->spot[i].opacity;
+          const float f = filter[xx-posx+rad+1]*filter[yy-posy+rad+1]*d->spot[i].opacity;          
           for(int c=0; c<ch; c++)
-            out[4*(roi_out->width*(y+v) + x+u) + c] =
-              out[4*(roi_out->width*(y+v) + x+u) + c] * (1.0f-f) +
-              in[4*(roi_in->width*(yc+v) + xc+u) + c] * f;
+            out[4*(roi_out->width*(yy-roi_out->y) + xx-roi_out->x) + c] =
+              out[4*(roi_out->width*(yy-roi_out->y) + xx-roi_out->x) + c] * (1.0f-f) +
+              in[4*(roi_in->width*(yy-posy+posy_source-roi_in->y) + xx-posx+posx_source-roi_in->x) + c] * f;
         }
     }
     
