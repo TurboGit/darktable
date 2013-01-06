@@ -28,15 +28,6 @@
 #include "develop/pixelpipe.h"
 #include "common/opencl.h"
 
-typedef enum dt_masks_type_t
-{
-  DT_MASKS_NONE     = 0,
-  DT_MASKS_CIRCLE   = 1,
-  DT_MASKS_POLYGON  = 2,
-  DT_MASKS_BEZIER   = 3
-}
-dt_masks_type_t;
-
 /** structure used to define a circle */
 typedef struct dt_masks_circle_t
 {
@@ -49,28 +40,13 @@ typedef struct dt_masks_circle_t
 }
 dt_masks_circle_t;
 
-typedef struct dt_masks_bezier_t
-{
-  //points used to define the form.
-  //ctrl1aX - ctrl1aY - pt1X - pt1Y - ctrl1bX - ctrl1bY - .....
-  float points[600];
-  //points used to draw the border : 1 point per node
-  float border[300];
-  
-  //nb of points (<=150)
-  int points_count;
-  
-  dt_masks_type_t form;
-  
-  //id used to store the form
-  long form_id;
-}
-dt_masks_bezier_t;
-
+/** get points in real space with respect of distortion dx and dy are used to eventually move the center of the circle */
 int dt_masks_circle_get_points(dt_develop_t *dev, dt_masks_circle_t circle, float **points, int *points_count, float dx, float dy);
 int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, float **border, int *border_count, float dx, float dy);
 
+/** get the rectangle which include the circle and his border */
 int dt_masks_circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, int *width, int *height, int *posx, int *posy);
+/** get the transparency mask of the circle and his border */
 int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, float **buffer, int *width, int *height, int *posx, int *posy);
 
 #endif

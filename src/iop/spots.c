@@ -727,6 +727,7 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
   dt_dev_get_pointer_zoom_pos(self->dev, x, y, &pzx, &pzy);
   float wd = self->dev->preview_pipe->backbuf_width;
   float ht = self->dev->preview_pipe->backbuf_height;
+  float rf = MIN(wd,ht);
   pzx += 0.5f;
   pzy += 0.5f;
   float mind = FLT_MAX;
@@ -767,12 +768,12 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
       p->spot[g->dragging].spot.center[0] = pzy;
     }
   }
-  if(selected >= 0 && mind < p->spot[selected].spot.radius * p->spot[selected].spot.radius * wd * wd)
+  if(selected >= 0 && mind < p->spot[selected].spot.radius * p->spot[selected].spot.radius * rf*rf)
   {
     g->selected = selected;
     g->hoover_c = hoover_c;
   }
-  else if(selected >= 0 && p->spot[selected].version > 1 && mind < (p->spot[selected].spot.radius + p->spot[selected].spot.border) * (p->spot[selected].spot.radius + p->spot[selected].spot.border) * wd * wd)
+  else if(selected >= 0 && p->spot[selected].version > 1 && mind < (p->spot[selected].spot.radius + p->spot[selected].spot.border) * (p->spot[selected].spot.radius + p->spot[selected].spot.border) * rf*rf)
   {
     g->selected = selected;
     g->border = TRUE;
