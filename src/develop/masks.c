@@ -54,26 +54,19 @@ int _circle_get_points(dt_develop_t *dev, float x, float y, float radius, float 
   return 0;  
 }
 
-int dt_masks_circle_get_points(dt_develop_t *dev, dt_masks_circle_t circle, float **points, int *points_count, float dx, float dy)
-{
-  return _circle_get_points(dev,circle.center[0]-dx, circle.center[1]-dy, circle.radius, points, points_count); 
-}
-
-int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, float **border, int *border_count, float dx, float dy)
-{
-  return _circle_get_points(dev,circle.center[0]-dx, circle.center[1]-dy, circle.radius + circle.border, border, border_count);   
-}
-
-int dt_masks_circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, int *width, int *height, int *posx, int *posy)
+int _circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, int *width, int *height, int *posx, int *posy)
 {  
-  float r = (circle.radius + circle.border)*MIN(wd,ht);
+  //we get the cicle values
+  dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form.points)->data);
+  
+  float r = (circle->radius + circle->border)*MIN(wd,ht);
   int l = (int) (2.0*M_PI*r);
   //buffer allocations
   float *points = malloc(2*(l+1)*sizeof(float)); 
   
   //now we set the points
-  points[0] = circle.center[0]*wd;
-  points[1] = circle.center[1]*ht;
+  points[0] = circle->center[0]*wd;
+  points[1] = circle->center[1]*ht;
   for (int i=1; i<l+1; i++)
   {
     float alpha = (i-1)*2.0*M_PI/(float) l;
@@ -104,10 +97,13 @@ int dt_masks_circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, 
   return 1;
 }
 
-int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, float **buffer, int *width, int *height, int *posx, int *posy)
+int _circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, float **buffer, int *width, int *height, int *posx, int *posy)
 {
   //we get the area
-  if (!dt_masks_circle_get_area(module,pipe,wd,ht,circle,width,height,posx,posy)) return 0;
+  if (!_circle_get_area(module,pipe,wd,ht,form,width,height,posx,posy)) return 0;
+  
+  //we get the cicle values
+  dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form.points)->data);
   
   //we create a buffer of points with all points in the area
   int w = *width, h = *height;
@@ -126,9 +122,9 @@ int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, 
   *buffer = malloc(w*h*sizeof(float));
   
   //we populate the buffer
-  float center[2] = {circle.center[0]*wd, circle.center[1]*ht};
-  float radius2 = circle.radius*MIN(wd,ht)*circle.radius*MIN(wd,ht);
-  float total2 = (circle.radius+circle.border)*MIN(wd,ht)*(circle.radius+circle.border)*MIN(wd,ht);
+  float center[2] = {circle->center[0]*wd, circle->center[1]*ht};
+  float radius2 = circle->radius*MIN(wd,ht)*circle->radius*MIN(wd,ht);
+  float total2 = (circle->radius+circle->border)*MIN(wd,ht)*(circle->radius+circle->border)*MIN(wd,ht);
   for (int i=0; i<h; i++)
     for (int j=0; j<w; j++)
     {
@@ -145,6 +141,188 @@ int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, 
     }
   free(points);
   return 1;
+}
+
+int dt_masks_get_points(dt_develop_t *dev, dt_masks_form_t form, float **points, int *points_count, float dx, float dy)
+{
+  if (form.type == DT_MASKS_CIRCLE)
+  {
+    dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form.points)->data);
+    return _circle_get_points(dev,circle->center[0]-dx, circle->center[1]-dy, circle->radius, points, points_count);
+  }
+  return 0;
+}
+
+int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_form_t form, float **border, int *border_count, float dx, float dy)
+{
+  if (form.type == DT_MASKS_CIRCLE)
+  {
+    dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form.points)->data);
+    return _circle_get_points(dev,circle->center[0]-dx, circle->center[1]-dy, circle->radius + circle->border, border, border_count); 
+  }
+  return 0;
+}
+
+int dt_masks_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, int *width, int *height, int *posx, int *posy)
+{
+  if (form.type == DT_MASKS_CIRCLE)
+  {
+    return _circle_get_area(module,pipe,wd,ht,form,width,height,posx,posy);
+  }
+  return 0;  
+}
+
+int dt_masks_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, float **buffer, int *width, int *height, int *posx, int *posy)
+{
+  if (form.type == DT_MASKS_CIRCLE)
+  {
+    return _circle_get_mask(module,pipe,wd,ht,form,buffer,width,height,posx,posy);
+  }
+  return 0; 
+}
+
+int dt_masks_get_blob(GList *forms, float **blob, int *blob_size)
+{
+  //first, we need to get the size of the blob to allocate it
+  int nb = 0;
+  int bs = 1;
+  GList *fs = g_list_first(forms);
+  while (fs)
+  {
+    dt_masks_form_t *f = (dt_masks_form_t *) (fs->data);
+    bs += 2;
+    if (f->type == DT_MASKS_CIRCLE) bs += 4;
+    nb++;
+    fs = g_list_next(fs);
+  }
+  *blob = malloc(bs*sizeof(float));
+  
+  //and then we go thought all forms and add them to the blob
+  (*blob)[0] = (float) nb;
+  GList *fs = g_list_first(forms);
+  nb=0;
+  while (fs)
+  {
+    dt_masks_form_t *f = (dt_masks_form_t *) (fs->data);
+    (*blob)[nb++] = (float) f->type;
+    (*blob)[nb++] = (float) f->formid;
+    if (f->type == DT_MASKS_CIRCLE)
+    {
+      dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(f->points)->data);
+      (*blob)[nb++] = circle->center[0];
+      (*blob)[nb++] = circle->center[1];
+      (*blob)[nb++] = circle->radius;
+      (*blob)[nb++] = circle->border;
+    }
+    fs = g_list_next(fs);
+  }
+  
+  *blob_size = bs;
+  
+  return 1;
+}
+
+int dt_masks_init_from_blob(GList **forms, float *blob, int blob_size)
+{
+  if (blob_size == 0) return 0;
+  //we read the number of forms
+  float nb = blob[0];
+  int pos=0;
+  //and we go throught the forms
+  // /!\ here we assume we don't get a corrupt buffer... may need some check !
+  for (int i=0; i<nb; i++)
+  {
+    dt_masks_form_t f;
+    f.type = (dt_masks_type_t) blob[pos++];
+    f.formid = blob[pos++];
+    if (f.type == DT_MASKS_CIRCLE)
+    {
+      dt_masks_point_circle_t circle;
+      circle.center[0] = blob[pos++];
+      circle.center[1] = blob[pos++];
+      circle.radius = blob[pos++];
+      circle.border = blob[pos++];
+      f.points = g_list_append(f.points,&circle);
+    }
+    *forms = g_list_append(*forms,&f);
+  }  
+  return 1;
+}
+
+void dt_masks_read_forms(dt_develop_t *dev)
+{
+  if(dev->image_storage.id <= 0) return;
+
+  sqlite3_stmt *stmt;
+  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db),
+      "select imgid, formid, form, version, points, points_count from masks where imgid = ?1", -1, &stmt, NULL);
+  DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
+  
+  while(sqlite3_step(stmt) == SQLITE_ROW)
+  {
+    // db record:
+    // 0-img, 1-formid, 2-form_type, 3-version, 4-points, 5-points_count
+    
+    //we get the values
+    dt_masks_form_t *form = (dt_masks_form_t *)malloc(sizeof(dt_masks_form_t));
+    form->formid = sqlite3_column_int(stmt, 1);
+    form->type = sqlite3_column_int(stmt, 2);
+    form->version = sqlite3_column_int(stmt, 3);
+    int nb_points = sqlite3_column_int(stmt, 5);
+    
+    //and now we "read" the blob
+    if (form->type == DT_MASKS_CIRCLE)
+    {
+      dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *)malloc(sizeof(dt_masks_point_circle_t));
+      memcpy(circle, sqlite3_column_blob(stmt, 4), sizeof(dt_masks_point_circle_t));
+      form->points = g_list_append(form->points,circle);
+    }
+    else if(form->type == DT_MASKS_BEZIER)
+    {
+      //TODO
+    }
+    
+    //and we can add the form to the list
+    dev->forms = g_list_append(dev->forms,form);
+  }
+  
+  sqlite3_finalize (stmt);  
+}
+
+void dt_masks_write_forms(dt_develop_t *dev)
+{
+  //we first erase all masks for the image present in the db
+  sqlite3_stmt *stmt;
+  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "delete from masks where imgid = ?1", -1, &stmt, NULL);
+  DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
+  sqlite3_step(stmt);
+  sqlite3_finalize (stmt);
+  
+  //and now we write each forms
+  GList *forms = g_list_first(dev->forms);
+  while (forms)
+  {
+    dt_masks_form_t *form = (dt_masks_form_t *) forms->data;
+
+    DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into masks (imgid, formid, form, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6)", -1, &stmt, NULL);
+    DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
+    DT_DEBUG_SQLITE3_BIND_INT(stmt, 2, form->formid);
+    DT_DEBUG_SQLITE3_BIND_INT(stmt, 3, form->type);
+    DT_DEBUG_SQLITE3_BIND_INT(stmt, 4, form->version);
+    if (form->type == DT_MASKS_CIRCLE)
+    {
+      DT_DEBUG_SQLITE3_BIND_BLOB(stmt, 5, form->points, sizeof(dt_masks_point_circle_t), SQLITE_TRANSIENT);
+      DT_DEBUG_SQLITE3_BIND_INT(stmt, 6, 1);
+    }
+    else if (form->type == DT_MASKS_BEZIER)
+    {
+      //TODO
+    }
+    
+    sqlite3_step (stmt);
+    sqlite3_finalize (stmt);
+    forms = g_list_next(forms);
+  }  
 }
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

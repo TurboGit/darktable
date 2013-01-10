@@ -402,6 +402,9 @@ void dt_control_create_database_schema()
                         "operation varchar(256), op_params blob, enabled integer, "
                         "blendop_params blob, blendop_version integer, multi_priority integer, multi_name varchar(256))", NULL, NULL, NULL);
   DT_DEBUG_SQLITE3_EXEC(dt_database_get(darktable.db),
+                        "create table mask (imgid integer, formid integer, form integer, "
+                        "version integer, points blob, points_count integer)", NULL, NULL, NULL);
+  DT_DEBUG_SQLITE3_EXEC(dt_database_get(darktable.db),
                         "create index if not exists imgid_index on history (imgid)", NULL, NULL, NULL);
   DT_DEBUG_SQLITE3_EXEC(dt_database_get(darktable.db),
                         "create table tags (id integer primary key, name varchar, icon blob, "
@@ -584,6 +587,9 @@ void dt_control_init(dt_control_t *s)
                    "create table style_items (styleid integer, num integer, "
                    "module integer, operation varchar(256), op_params blob, "
                    "enabled integer)", NULL, NULL, NULL);
+      sqlite3_exec(dt_database_get(darktable.db),
+                   "create table mask (imgid integer, formid integer, form integer, "
+                   "version integer, points blob, points_count integer)", NULL, NULL, NULL);
       sqlite3_exec(dt_database_get(darktable.db),
                    "create table meta_data (id integer, key integer,value varchar)",
                    NULL, NULL, NULL);

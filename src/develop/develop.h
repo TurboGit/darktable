@@ -85,6 +85,9 @@ typedef struct dt_develop_t
   float histogram_max, histogram_pre_tonecurve_max, histogram_pre_levels_max;
   gboolean histogram_linear;
 
+  // list of forms iop can use for masks or whatever
+  GList *forms;
+  
   /* proxy for communication between plugins and develop/darkroom */
   struct
   {

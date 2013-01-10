@@ -28,26 +28,67 @@
 #include "develop/pixelpipe.h"
 #include "common/opencl.h"
 
-/** structure used to define a circle */
-typedef struct dt_masks_circle_t
+/**forms types */
+typedef enum dt_masks_type_t
+{
+  DT_MASKS_NONE = 0, // keep first
+  DT_MASKS_CIRCLE = 1,
+  DT_MASKS_BEZIER = 2
+
+}
+dt_masks_type_t;
+
+/** structure used to store 1 point for a circle */
+typedef struct dt_masks_point_circle_t
 {
   float center[2];
   float radius;
   float border;
+}
+dt_masks_point_circle_t;
+
+/** structure used to store 1 point for a bezier form */
+typedef struct dt_masks_point_bezier_t
+{
+  float corner[2];
+  float ctrl1[2];
+  float ctrl2[2];
+  float border[2];
+}
+dt_masks_point_bezier_t;
+
+/** structure used to define a form */
+typedef struct dt_masks_form_t
+{
+  GList *points
+  dt_masks_type_t type;
   
   //id used to store the form
-  long form_id;
+  long formid;
+  
+  //version of the form
+  int version;
 }
-dt_masks_circle_t;
+dt_masks_form_t;
 
 /** get points in real space with respect of distortion dx and dy are used to eventually move the center of the circle */
-int dt_masks_circle_get_points(dt_develop_t *dev, dt_masks_circle_t circle, float **points, int *points_count, float dx, float dy);
-int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_circle_t circle, float **border, int *border_count, float dx, float dy);
+int dt_masks_get_points(dt_develop_t *dev, dt_masks_form_t form, float **points, int *points_count, float dx, float dy);
+int dt_masks_get_border(dt_develop_t *dev, dt_masks_form_t form, float **border, int *border_count, float dx, float dy);
 
-/** get the rectangle which include the circle and his border */
-int dt_masks_circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, int *width, int *height, int *posx, int *posy);
-/** get the transparency mask of the circle and his border */
-int dt_masks_circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_circle_t circle, float **buffer, int *width, int *height, int *posx, int *posy);
+/** get the rectangle which include the form and his border */
+int dt_masks_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, int *width, int *height, int *posx, int *posy);
+/** get the transparency mask of the form and his border */
+int dt_masks_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, float **buffer, int *width, int *height, int *posx, int *posy);
+
+
+/** get the binary blob of the form */
+int dt_masks_get_blob(GList *forms, float **blob, int *blob_size);
+/** set the form from the blob */
+int dt_masks_init_from_blob(GList **forms, float *blob, int blob_size);
+/** read the forms from the db */
+void dt_masks_read_forms(dt_develop_t *dev);
+/** write the forms into the db */
+void dt_masks_write_forms(dt_develop_t *dev);
 
 #endif
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
