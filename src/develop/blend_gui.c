@@ -932,6 +932,7 @@ void dt_iop_gui_cleanup_blending(dt_iop_module_t *module)
 void dt_iop_gui_update_blending(dt_iop_module_t *module)
 {
   dt_iop_gui_blend_data_t *bd = (dt_iop_gui_blend_data_t*)module->blend_data;
+  dt_develop_blend_params_t *bp = (dt_develop_blend_params_t*)module->blend_params;
 
   if (!(module->flags() & IOP_FLAGS_SUPPORTS_BLENDING) || !bd || !bd->blend_inited) return;
 
@@ -942,8 +943,7 @@ void dt_iop_gui_update_blending(dt_iop_module_t *module)
   dt_bauhaus_slider_set(bd->opacity_slider, module->blend_params->opacity);
 
   dt_iop_gui_update_blendif(module);
-
-
+  
   /* now show hide controls as required */
   if(bd->modes[dt_bauhaus_combobox_get(bd->blend_modes_combo)].mode == DEVELOP_BLEND_DISABLED)
   {
@@ -1043,7 +1043,19 @@ void dt_iop_gui_init_blending(GtkWidget *iopw, dt_iop_module_t *module)
     dt_bauhaus_slider_set_format(bd->opacity_slider, "%.0f%%");
     module->fusion_slider = bd->opacity_slider;
 
-
+    bd->form_box = GTK_VBOX(gtk_vbox_new(FALSE,DT_GUI_IOP_MODULE_CONTROL_SPACING));
+    /* populate form_box */
+    for (int i=0; i<module->blend_params->forms_count; i++)
+    {
+      char str[7];
+      snprintf(str,3,"form %d",i);
+      bd->form_label[i] = gtk_event_box_new();
+      gtk_container_add(GTK_CONTAINER(bd->form_label[i]), gtk_label_new(str));
+      g_object_set_data(G_OBJECT(bd->form_label[i]), "form", GUINT_TO_POINTER(i));
+      g_signal_connect(G_OBJECT(bd->form_label[i]), "button-press-event", G_CALLBACK(dt_iop_gui_blend_setform_callback), module);
+      gtk_box_pack_end(GTK_BOX(bd->form_box), bd->form_label[i], TRUE, TRUE,0);
+    }
+  
     for(int k = 0; k < bd->number_modes; k++)
       dt_bauhaus_combobox_add(bd->blend_modes_combo, bd->modes[k].name);
 
@@ -1057,6 +1069,7 @@ void dt_iop_gui_init_blending(GtkWidget *iopw, dt_iop_module_t *module)
     g_signal_connect (G_OBJECT (bd->blend_modes_combo), "value-changed",
                       G_CALLBACK (_blendop_mode_callback), bd);
 
+    gtk_box_pack_start(GTK_BOX(iopw), bd->form_box, TRUE, TRUE,0);
     gtk_box_pack_start(GTK_BOX(iopw), bd->blend_modes_combo, TRUE, TRUE,0);
     gtk_box_pack_start(GTK_BOX(iopw), bd->opacity_slider, TRUE, TRUE,0);
 
@@ -1070,6 +1083,20 @@ void dt_iop_gui_init_blending(GtkWidget *iopw, dt_iop_module_t *module)
   }
 }
 
+void dt_iop_gui_blend_setform_callback(GtkWidget *widget, GdkEventButton *e, dt_iop_module_t *data)
+{
+  //first, we need to retrieve the form position
+  int pos = -1;
+  pos = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(widget), "form"));
+  
+  printf("click %d\n",pos);
+  
+  if (pos < 0) return;
+  
+  double formid = data->blend_params->forms[pos];
+  
+  data->dev->form_visible = dt_masks_get_from_id(data->dev,formid);
+}
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
 // vim: shiftwidth=2 expandtab tabstop=2 cindent

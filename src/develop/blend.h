@@ -249,6 +249,9 @@ typedef struct dt_iop_gui_blend_data_t
   int numberstops[8];
   const dt_iop_gui_blendif_colorstop_t *colorstops[8];
   float increments[8];
+  
+  GtkVBox *form_box;
+  GtkWidget form_label[64];
 }
 dt_iop_gui_blend_data_t;
 
@@ -284,6 +287,10 @@ int dt_iop_gui_blending_mode_seq(dt_iop_gui_blend_data_t *bd, int mode);
 /** apply blend for opencl modules*/
 int dt_develop_blend_process_cl (struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *piece, cl_mem dev_in, cl_mem dev_out, const struct dt_iop_roi_t *roi_in, const struct dt_iop_roi_t *roi_out);
 #endif
+
+/** function related to masks */
+int dt_develop_blend_add_form (dt_iop_module_t *module, double id, int state);
+void dt_iop_gui_blend_setform_callback(GtkWidget *widget, GdkEventButton *e, dt_iop_module_t *data);
 
 #endif
 

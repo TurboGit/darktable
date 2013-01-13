@@ -2052,6 +2052,27 @@ dt_develop_blend_legacy_params (dt_iop_module_t *module, const void *const old_p
   return 1;
 }
 
+int dt_develop_blend_add_form (dt_iop_module_t *module, double id, int state)
+{
+  dt_iop_gui_blend_data_t *bd = (dt_iop_gui_blend_data_t*)module->blend_data;
+  
+  //update params
+  module->blend_params->forms[forms_count] = id;
+  module->blend_params->forms_state[forms_count] = state;
+  
+  //update gui
+  char str[7];
+  snprintf(str,3,"form %d",forms_count);
+  bd->form_label[forms_count] = gtk_event_box_new();
+  gtk_container_add(GTK_CONTAINER(bd->form_label[forms_count]), gtk_label_new(str));
+  g_object_set_data(G_OBJECT(bd->form_label[forms_count]), "form", GUINT_TO_POINTER(forms_count));
+  gtk_box_pack_end(GTK_BOX(bd->form_box), bd->form_label[forms_count], TRUE, TRUE,0);
+  g_signal_connect(G_OBJECT(bd->form_label[forms_count]), "button-press-event", G_CALLBACK(dt_iop_gui_blend_setform_callback), module);
+  
+  module->blend_params->forms_count++;
+  return 1;
+}
+
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
 // vim: shiftwidth=2 expandtab tabstop=2 cindent
 // kate: tab-indents: off; indent-width 2; replace-tabs on; indent-mode cstyle; remove-trailing-space on;

@@ -87,6 +87,7 @@ typedef struct dt_develop_t
 
   // list of forms iop can use for masks or whatever
   GList *forms;
+  struct dt_masks_form_t *form_visible;
   
   /* proxy for communication between plugins and develop/darkroom */
   struct
