@@ -230,6 +230,7 @@ void dt_masks_read_forms(dt_develop_t *dev)
     form->formid = sqlite3_column_double(stmt, 1);
     form->type = sqlite3_column_int(stmt, 2);
     form->version = sqlite3_column_int(stmt, 3);
+    form->points = NULL;
     //int nb_points = sqlite3_column_int(stmt, 5);
     
     //and now we "read" the blob
@@ -269,7 +270,8 @@ void dt_masks_write_form(dt_masks_form_t *form, dt_develop_t *dev)
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 4, form->version);
   if (form->type == DT_MASKS_CIRCLE)
   {
-    DT_DEBUG_SQLITE3_BIND_BLOB(stmt, 5, form->points, sizeof(dt_masks_point_circle_t), SQLITE_TRANSIENT);
+    dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
+    DT_DEBUG_SQLITE3_BIND_BLOB(stmt, 5, circle, sizeof(dt_masks_point_circle_t), SQLITE_TRANSIENT);
     DT_DEBUG_SQLITE3_BIND_INT(stmt, 6, 1);
   }
   else if (form->type == DT_MASKS_BEZIER)

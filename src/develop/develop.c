@@ -27,6 +27,7 @@
 #include "common/imageio.h"
 #include "common/tags.h"
 #include "common/debug.h"
+#include "develop/masks.h"
 #include "common/similarity.h"
 #include "gui/gtk.h"
 
@@ -388,6 +389,8 @@ void dt_dev_load_image(dt_develop_t *dev, const uint32_t imgid)
   dev->first_load = 1;
   dev->image_dirty = dev->preview_dirty = 1;
 
+  dt_masks_read_forms(dev);
+  
   dev->iop = dt_iop_load_modules(dev);
 
   dt_dev_read_history(dev);
