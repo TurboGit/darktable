@@ -64,7 +64,7 @@ typedef struct dt_masks_form_t
   dt_masks_type_t type;
   
   //id used to store the form
-  long formid;
+  double formid;
   
   //version of the form
   int version;
@@ -80,14 +80,15 @@ int dt_masks_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd,
 /** get the transparency mask of the form and his border */
 int dt_masks_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, float **buffer, int *width, int *height, int *posx, int *posy);
 
+/** we create a completly new form. */
+dt_masks_form_t *dt_masks_create(dt_masks_type_t type);
+/** retrieve a form with is id */
+dt_masks_form_t *dt_masks_get_from_id(dt_develop_t *dev, double id);
 
-/** get the binary blob of the form */
-int dt_masks_get_blob(GList *forms, float **blob, int *blob_size);
-/** set the form from the blob */
-int dt_masks_init_from_blob(GList **forms, float *blob, int blob_size);
 /** read the forms from the db */
 void dt_masks_read_forms(dt_develop_t *dev);
 /** write the forms into the db */
+void dt_masks_write_form(dt_masks_form_t *form, dt_develop_t *dev);
 void dt_masks_write_forms(dt_develop_t *dev);
 
 #endif

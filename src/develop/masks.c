@@ -181,73 +181,30 @@ int dt_masks_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd,
   return 0; 
 }
 
-int dt_masks_get_blob(GList *forms, float **blob, int *blob_size)
+dt_masks_form_t *dt_masks_create(dt_masks_type_t type)
 {
-  //first, we need to get the size of the blob to allocate it
-  int nb = 0;
-  int bs = 1;
-  GList *fs = g_list_first(forms);
-  while (fs)
-  {
-    dt_masks_form_t *f = (dt_masks_form_t *) (fs->data);
-    bs += 2;
-    if (f->type == DT_MASKS_CIRCLE) bs += 4;
-    nb++;
-    fs = g_list_next(fs);
-  }
-  *blob = malloc(bs*sizeof(float));
+  dt_masks_form_t *form = (dt_masks_form_t *)malloc(sizeof(dt_masks_form_t));
+  form->type = type;
   
-  //and then we go thought all forms and add them to the blob
-  (*blob)[0] = (float) nb;
-  GList *fs = g_list_first(forms);
-  nb=0;
-  while (fs)
-  {
-    dt_masks_form_t *f = (dt_masks_form_t *) (fs->data);
-    (*blob)[nb++] = (float) f->type;
-    (*blob)[nb++] = (float) f->formid;
-    if (f->type == DT_MASKS_CIRCLE)
-    {
-      dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(f->points)->data);
-      (*blob)[nb++] = circle->center[0];
-      (*blob)[nb++] = circle->center[1];
-      (*blob)[nb++] = circle->radius;
-      (*blob)[nb++] = circle->border;
-    }
-    fs = g_list_next(fs);
-  }
+  struct timeval tv;
+  gettimeofday(&tv,NULL);
+  form->formid = tv.tv_sec*1000000.0+tv.tv_usec;
   
-  *blob_size = bs;
-  
-  return 1;
+  return form;
 }
 
-int dt_masks_init_from_blob(GList **forms, float *blob, int blob_size)
+dt_masks_form_t *dt_masks_get_from_id(dt_develop_t *dev, double id)
 {
-  if (blob_size == 0) return 0;
-  //we read the number of forms
-  float nb = blob[0];
-  int pos=0;
-  //and we go throught the forms
-  // /!\ here we assume we don't get a corrupt buffer... may need some check !
-  for (int i=0; i<nb; i++)
+  GList *forms = g_list_first(dev->forms);
+  while (forms)
   {
-    dt_masks_form_t f;
-    f.type = (dt_masks_type_t) blob[pos++];
-    f.formid = blob[pos++];
-    if (f.type == DT_MASKS_CIRCLE)
-    {
-      dt_masks_point_circle_t circle;
-      circle.center[0] = blob[pos++];
-      circle.center[1] = blob[pos++];
-      circle.radius = blob[pos++];
-      circle.border = blob[pos++];
-      f.points = g_list_append(f.points,&circle);
-    }
-    *forms = g_list_append(*forms,&f);
-  }  
-  return 1;
+    dt_masks_form_t *form = (dt_masks_form_t *) forms->data;
+    if (form->formid == id) return form;
+    forms = g_list_next(forms);
+  }
+  return NULL;
 }
+
 
 void dt_masks_read_forms(dt_develop_t *dev)
 {
@@ -265,7 +222,7 @@ void dt_masks_read_forms(dt_develop_t *dev)
     
     //we get the values
     dt_masks_form_t *form = (dt_masks_form_t *)malloc(sizeof(dt_masks_form_t));
-    form->formid = sqlite3_column_int(stmt, 1);
+    form->formid = sqlite3_column_double(stmt, 1);
     form->type = sqlite3_column_int(stmt, 2);
     form->version = sqlite3_column_int(stmt, 3);
     int nb_points = sqlite3_column_int(stmt, 5);
@@ -289,6 +246,36 @@ void dt_masks_read_forms(dt_develop_t *dev)
   sqlite3_finalize (stmt);  
 }
 
+void dt_masks_write_form(dt_masks_form_t *form, dt_develop_t *dev)
+{
+  //we first erase all masks for the image present in the db
+  sqlite3_stmt *stmt;
+  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "delete from masks where imgid = ?1 and formid = ?2", -1, &stmt, NULL);
+  DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
+  DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 1, form->formid);
+  sqlite3_step(stmt);
+  sqlite3_finalize (stmt);
+  
+  //and we write the form
+  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into masks (imgid, formid, form, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6)", -1, &stmt, NULL);
+  DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
+  DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 2, form->formid);
+  DT_DEBUG_SQLITE3_BIND_INT(stmt, 3, form->type);
+  DT_DEBUG_SQLITE3_BIND_INT(stmt, 4, form->version);
+  if (form->type == DT_MASKS_CIRCLE)
+  {
+    DT_DEBUG_SQLITE3_BIND_BLOB(stmt, 5, form->points, sizeof(dt_masks_point_circle_t), SQLITE_TRANSIENT);
+    DT_DEBUG_SQLITE3_BIND_INT(stmt, 6, 1);
+  }
+  else if (form->type == DT_MASKS_BEZIER)
+  {
+    //TODO
+  }
+  
+  sqlite3_step (stmt);
+  sqlite3_finalize (stmt);
+}
+
 void dt_masks_write_forms(dt_develop_t *dev)
 {
   //we first erase all masks for the image present in the db
@@ -306,7 +293,7 @@ void dt_masks_write_forms(dt_develop_t *dev)
 
     DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into masks (imgid, formid, form, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6)", -1, &stmt, NULL);
     DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
-    DT_DEBUG_SQLITE3_BIND_INT(stmt, 2, form->formid);
+    DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 2, form->formid);
     DT_DEBUG_SQLITE3_BIND_INT(stmt, 3, form->type);
     DT_DEBUG_SQLITE3_BIND_INT(stmt, 4, form->version);
     if (form->type == DT_MASKS_CIRCLE)

@@ -29,7 +29,7 @@
 #include "develop/pixelpipe.h"
 #include "common/opencl.h"
 
-#define DEVELOP_BLEND_VERSION				(4)
+#define DEVELOP_BLEND_VERSION				(5)
 
 
 #define DEVELOP_BLEND_MASK_FLAG		  0x80
@@ -143,6 +143,22 @@ typedef struct dt_develop_blend_params3_t
 }
 dt_develop_blend_params3_t;
 
+typedef struct dt_develop_blend_params4_t
+{
+  /** blending mode */
+  uint32_t mode;
+  /** mixing opacity */
+  float opacity;
+  /** id of mask in current pipeline */
+  uint32_t mask_id;
+  /** blendif mask */
+  uint32_t blendif;
+  /** blur radius */
+  float radius;
+  /** blendif parameters */
+  float blendif_parameters[4*DEVELOP_BLENDIF_SIZE];
+}
+dt_develop_blend_params4_t;
 
 typedef struct dt_develop_blend_params_t
 {
@@ -158,6 +174,13 @@ typedef struct dt_develop_blend_params_t
   float radius;
   /** blendif parameters */
   float blendif_parameters[4*DEVELOP_BLENDIF_SIZE];
+  
+  /** id of masks */
+  double forms[64];
+  /** state of masks */
+  int forms_state[64];
+  /** number of masks */
+  int forms_count;
 }
 dt_develop_blend_params_t;
 
