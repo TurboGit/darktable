@@ -15,11 +15,8 @@
     You should have received a copy of the GNU General Public License
     along with darktable.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "control/control.h"
-#include "develop/imageop.h"
-#include "develop/tiling.h"
-#include "common/gaussian.h"
 #include "develop/masks.h"
+#include "common/debug.h"
 
 int _circle_get_points(dt_develop_t *dev, float x, float y, float radius, float **points, int *points_count)
 {
@@ -54,10 +51,10 @@ int _circle_get_points(dt_develop_t *dev, float x, float y, float radius, float 
   return 0;  
 }
 
-int _circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, int *width, int *height, int *posx, int *posy)
+int _circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t *form, int *width, int *height, int *posx, int *posy)
 {  
   //we get the cicle values
-  dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form.points)->data);
+  dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
   
   float r = (circle->radius + circle->border)*MIN(wd,ht);
   int l = (int) (2.0*M_PI*r);
@@ -97,13 +94,13 @@ int _circle_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, 
   return 1;
 }
 
-int _circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, float **buffer, int *width, int *height, int *posx, int *posy)
+int _circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t *form, float **buffer, int *width, int *height, int *posx, int *posy)
 {
   //we get the area
   if (!_circle_get_area(module,pipe,wd,ht,form,width,height,posx,posy)) return 0;
   
   //we get the cicle values
-  dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form.points)->data);
+  dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
   
   //we create a buffer of points with all points in the area
   int w = *width, h = *height;
@@ -143,42 +140,48 @@ int _circle_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, 
   return 1;
 }
 
-int dt_masks_get_points(dt_develop_t *dev, dt_masks_form_t form, float **points, int *points_count, float dx, float dy)
+int dt_masks_get_points(dt_develop_t *dev, dt_masks_form_t *form, float **points, int *points_count, float dx, float dy)
 {
-  if (form.type == DT_MASKS_CIRCLE)
+  if (form->type == DT_MASKS_CIRCLE)
   {
-    dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form.points)->data);
+    dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
     return _circle_get_points(dev,circle->center[0]-dx, circle->center[1]-dy, circle->radius, points, points_count);
   }
   return 0;
 }
 
-int dt_masks_circle_get_border(dt_develop_t *dev, dt_masks_form_t form, float **border, int *border_count, float dx, float dy)
+int dt_masks_get_border(dt_develop_t *dev, dt_masks_form_t *form, float **border, int *border_count, float dx, float dy)
 {
-  if (form.type == DT_MASKS_CIRCLE)
+  if (form->type == DT_MASKS_CIRCLE)
   {
-    dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form.points)->data);
+    dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
     return _circle_get_points(dev,circle->center[0]-dx, circle->center[1]-dy, circle->radius + circle->border, border, border_count); 
   }
   return 0;
 }
 
-int dt_masks_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, int *width, int *height, int *posx, int *posy)
+int dt_masks_get_area(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t *form, int *width, int *height, int *posx, int *posy)
 {
-  if (form.type == DT_MASKS_CIRCLE)
+  if (form->type == DT_MASKS_CIRCLE)
   {
     return _circle_get_area(module,pipe,wd,ht,form,width,height,posx,posy);
   }
   return 0;  
 }
 
-int dt_masks_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t form, float **buffer, int *width, int *height, int *posx, int *posy)
+int dt_masks_get_mask(dt_iop_module_t *module, dt_dev_pixelpipe_t *pipe, int wd, int ht, dt_masks_form_t *form, float **buffer, int *width, int *height, int *posx, int *posy)
 {
-  if (form.type == DT_MASKS_CIRCLE)
+  if (form->type == DT_MASKS_CIRCLE)
   {
     return _circle_get_mask(module,pipe,wd,ht,form,buffer,width,height,posx,posy);
   }
   return 0; 
+}
+
+dt_masks_point_circle_t *dt_masks_get_circle(dt_masks_form_t *form)
+{
+  if (form->type == DT_MASKS_CIRCLE) return (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
+  return NULL;
 }
 
 dt_masks_form_t *dt_masks_create(dt_masks_type_t type)
@@ -189,6 +192,8 @@ dt_masks_form_t *dt_masks_create(dt_masks_type_t type)
   struct timeval tv;
   gettimeofday(&tv,NULL);
   form->formid = tv.tv_sec*1000000.0+tv.tv_usec;
+  
+  form->points = NULL;
   
   return form;
 }
@@ -212,7 +217,7 @@ void dt_masks_read_forms(dt_develop_t *dev)
 
   sqlite3_stmt *stmt;
   DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db),
-      "select imgid, formid, form, version, points, points_count from masks where imgid = ?1", -1, &stmt, NULL);
+      "select imgid, formid, form, version, points, points_count from mask where imgid = ?1", -1, &stmt, NULL);
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
   
   while(sqlite3_step(stmt) == SQLITE_ROW)
@@ -225,7 +230,7 @@ void dt_masks_read_forms(dt_develop_t *dev)
     form->formid = sqlite3_column_double(stmt, 1);
     form->type = sqlite3_column_int(stmt, 2);
     form->version = sqlite3_column_int(stmt, 3);
-    int nb_points = sqlite3_column_int(stmt, 5);
+    //int nb_points = sqlite3_column_int(stmt, 5);
     
     //and now we "read" the blob
     if (form->type == DT_MASKS_CIRCLE)
@@ -250,14 +255,14 @@ void dt_masks_write_form(dt_masks_form_t *form, dt_develop_t *dev)
 {
   //we first erase all masks for the image present in the db
   sqlite3_stmt *stmt;
-  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "delete from masks where imgid = ?1 and formid = ?2", -1, &stmt, NULL);
+  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "delete from mask where imgid = ?1 and formid = ?2", -1, &stmt, NULL);
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
   DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 1, form->formid);
   sqlite3_step(stmt);
   sqlite3_finalize (stmt);
   
   //and we write the form
-  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into masks (imgid, formid, form, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6)", -1, &stmt, NULL);
+  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into mask (imgid, formid, form, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6)", -1, &stmt, NULL);
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
   DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 2, form->formid);
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 3, form->type);
@@ -280,7 +285,7 @@ void dt_masks_write_forms(dt_develop_t *dev)
 {
   //we first erase all masks for the image present in the db
   sqlite3_stmt *stmt;
-  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "delete from masks where imgid = ?1", -1, &stmt, NULL);
+  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "delete from mask where imgid = ?1", -1, &stmt, NULL);
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
   sqlite3_step(stmt);
   sqlite3_finalize (stmt);
@@ -291,7 +296,7 @@ void dt_masks_write_forms(dt_develop_t *dev)
   {
     dt_masks_form_t *form = (dt_masks_form_t *) forms->data;
 
-    DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into masks (imgid, formid, form, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6)", -1, &stmt, NULL);
+    DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into mask (imgid, formid, form, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6)", -1, &stmt, NULL);
     DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
     DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 2, form->formid);
     DT_DEBUG_SQLITE3_BIND_INT(stmt, 3, form->type);

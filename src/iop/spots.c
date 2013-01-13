@@ -35,7 +35,7 @@ DT_MODULE(2)
 
 typedef struct spot_t
 {
-  dt_masks_circle_t spot;
+  double formid;
   float source[2];
   
   float opacity;  //between 0 and 1
@@ -76,6 +76,7 @@ typedef struct dt_iop_spots_gui_data_t
   gboolean border;  //is the pointer in the "border" part ?
   float last_radius;
   spot_draw_t spot[32];
+  dt_masks_point_circle_t* form[32];
   uint64_t pipe_hash;
 }
 dt_iop_spots_gui_data_t;
@@ -96,7 +97,7 @@ groups ()
 
 int legacy_params (dt_iop_module_t *self, const void *const old_params, const int old_version, void *new_params, const int new_version)
 {
-  if(old_version == 1 && new_version == 2)
+  /*if(old_version == 1 && new_version == 2)
   {
     typedef struct dt_iop_spots_v1_t
     {
@@ -130,7 +131,7 @@ int legacy_params (dt_iop_module_t *self, const void *const old_params, const in
       n->spot[i].spot.radius = o->spot[i].radius;
     }
     return 0;
-  }
+  }*/
   return 1;
 }
 
@@ -140,15 +141,18 @@ static void gui_spot_add(dt_iop_module_t *self, spot_draw_t *gspt, int spot_inde
   dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
   gspt->ok = 0;
   gspt->source_count = gspt->source_border_count = gspt->spot_count = 0;
-  float dx = p->spot[spot_index].spot.center[0] - p->spot[spot_index].source[0];
-  float dy = p->spot[spot_index].spot.center[1] - p->spot[spot_index].source[1];
-  if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->source, &gspt->source_count,dx,dy))
+  dt_masks_form_t *form = dt_masks_get_from_id(self->dev,p->spot[spot_index].formid);
+  dt_masks_point_circle_t *circle = dt_masks_get_circle(form);
+  
+  float dx = circle->center[0] - p->spot[spot_index].source[0];
+  float dy = circle->center[1] - p->spot[spot_index].source[1];
+  if (dt_masks_get_points(dev,form, &gspt->source, &gspt->source_count,dx,dy))
   {
-    if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->spot, &gspt->spot_count,0,0))
+    if (dt_masks_get_points(dev,form, &gspt->spot, &gspt->spot_count,0,0))
     {
       if (p->spot[spot_index].version > 1)
       {
-        if (dt_masks_circle_get_border(dev,p->spot[spot_index].spot, &gspt->source_border, &gspt->source_border_count,dx,dy))
+        if (dt_masks_get_border(dev,form, &gspt->source_border, &gspt->source_border_count,dx,dy))
         {
           gspt->ok = 1;
         }
@@ -160,6 +164,7 @@ static void gui_spot_add(dt_iop_module_t *self, spot_draw_t *gspt, int spot_inde
 static void gui_spot_remove(dt_iop_module_t *self, spot_draw_t *gspt, int spot_index)
 {
   dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
+  
   gspt->source_count = gspt->source_border_count = gspt->spot_count = 0;
   free(gspt->source);
   gspt->source = NULL;
@@ -177,7 +182,8 @@ static void gui_spot_update_source(dt_iop_module_t *self, spot_draw_t *gspt, int
 {
   dt_develop_t *dev = self->dev;
   dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
-  
+  dt_masks_form_t *form = dt_masks_get_from_id(self->dev,p->spot[spot_index].formid);
+  dt_masks_point_circle_t *circle = dt_masks_get_circle(form);
   //we remove the source buffers
   gspt->source_count = gspt->source_border_count = 0;
   free(gspt->source);
@@ -189,13 +195,13 @@ static void gui_spot_update_source(dt_iop_module_t *self, spot_draw_t *gspt, int
   }
   
   //and we recreate them
-  float dx = p->spot[spot_index].spot.center[0] - p->spot[spot_index].source[0];
-  float dy = p->spot[spot_index].spot.center[1] - p->spot[spot_index].source[1];
-  if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->source, &gspt->source_count,dx,dy))
+  float dx = circle->center[0] - p->spot[spot_index].source[0];
+  float dy = circle->center[1] - p->spot[spot_index].source[1];
+  if (dt_masks_get_points(dev,form, &gspt->source, &gspt->source_count,dx,dy))
   {
     if (p->spot[spot_index].version > 1)
     {
-      if (dt_masks_circle_get_border(dev,p->spot[spot_index].spot, &gspt->source_border, &gspt->source_border_count,dx,dy))
+      if (dt_masks_get_border(dev,form, &gspt->source_border, &gspt->source_border_count,dx,dy))
       {
         return;
       }
@@ -220,8 +226,9 @@ static void gui_spot_update_spot(dt_iop_module_t *self, spot_draw_t *gspt, int s
   //and we recreate it
   dt_develop_t *dev = self->dev;
   dt_iop_spots_params_t   *p = (dt_iop_spots_params_t   *)self->params;
+  dt_masks_form_t *form = dt_masks_get_from_id(self->dev,p->spot[spot_index].formid);
   
-  if (dt_masks_circle_get_points(dev,p->spot[spot_index].spot, &gspt->spot, &gspt->spot_count,0,0))
+  if (dt_masks_get_points(dev,form, &gspt->spot, &gspt->spot_count,0,0))
   {
     return;
   }
@@ -296,13 +303,18 @@ void modify_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *
   // We iterate throught all spots or polygons
   for(int i=0; i<d->num_spots; i++)
   {
+    //we get the spot
+    dt_masks_form_t *form = dt_masks_get_from_id(self->dev,d->spot[i].formid);
+    if (!form) continue;
+    dt_masks_point_circle_t *circle = dt_masks_get_circle(form);
+    if (!circle) continue;
     // convert in full image space (at scale of ROI)
-    const int x = d->spot[i].spot.center[0] *imw, y = d->spot[i].spot.center[1] *imh;
+    const int x = circle->center[0] *imw, y = circle->center[1] *imh;
     const int xc = d->spot[i].source[0]*imw, yc = d->spot[i].source[1]*imh;
     //const int rad = d->spot[i].spot.radius * MIN(imw, imh);
     
     int w,h,l,t;
-    dt_masks_circle_get_area(self,piece->pipe,imw,imh,d->spot[i].spot,&w,&h,&l,&t);
+    dt_masks_get_area(self,piece->pipe,imw,imh,form,&w,&h,&l,&t);
     
     //If the destination is outside the ROI, we skip this form !
     if (t>=roi_out->y+roi_out->height || t+h<=roi_out->y || l>=roi_out->x+roi_out->width || l+w<=roi_out->x) continue;
@@ -355,13 +367,19 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
   // iterate throught all forms
   for(int i=0; i<d->num_spots; i++)
   {
+    //we get the spot
+    dt_masks_form_t *form = dt_masks_get_from_id(self->dev,d->spot[i].formid);
+    if (!form) continue;
+    dt_masks_point_circle_t *circle = dt_masks_get_circle(form);
+    if (!circle) continue;
+    
     //we first need to know if we copy the entire form or not
     // convert in full image space (at scale of ROI)
-    const int x = d->spot[i].spot.center[0] *imw, y = d->spot[i].spot.center[1] *imh;
+    const int x = circle->center[0] *imw, y = circle->center[1] *imh;
     const int xc = d->spot[i].source[0]*imw, yc = d->spot[i].source[1]*imh;
     
     int w,h,l,t;
-    dt_masks_circle_get_area(self,piece->pipe,imw,imh,d->spot[i].spot,&w,&h,&l,&t);
+    dt_masks_get_area(self,piece->pipe,imw,imh,form,&w,&h,&l,&t);
     
     //If the destination is outside the ROI, we skip this form !
     if (t>=roi_out->y+roi_out->height || t+h<=roi_out->y || l>=roi_out->x+roi_out->width || l+w<=roi_out->x) continue;
@@ -383,9 +401,9 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
       //we get the mask
       float *mask;
       int posx,posy,width,height;    
-      dt_masks_circle_get_mask(self,piece->pipe,roi_in->scale*piece->buf_in.width,roi_in->scale*piece->buf_in.height,d->spot[i].spot,&mask,&width,&height,&posx,&posy);
-      int posx_source = posx + (d->spot[i].source[0] - d->spot[i].spot.center[0])*roi_in->scale*piece->buf_in.width;
-      int posy_source = posy + (d->spot[i].source[1] - d->spot[i].spot.center[1])*roi_in->scale*piece->buf_in.height;
+      dt_masks_get_mask(self,piece->pipe,roi_in->scale*piece->buf_in.width,roi_in->scale*piece->buf_in.height,form,&mask,&width,&height,&posx,&posy);
+      int posx_source = posx + (d->spot[i].source[0] - circle->center[0])*roi_in->scale*piece->buf_in.width;
+      int posy_source = posy + (d->spot[i].source[1] - circle->center[1])*roi_in->scale*piece->buf_in.height;
   
       for (int yy=t ; yy<t+h; yy++)
         for (int xx=l ; xx<l+w; xx++)
@@ -401,11 +419,11 @@ void process (struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, void 
     else
     {
       // convert from world space:
-      const int posx  = (d->spot[i].spot.center[0] *piece->buf_in.width)/scale;
-      const int posy  = (d->spot[i].spot.center[1] *piece->buf_in.height)/scale;
+      const int posx  = (circle->center[0] *piece->buf_in.width)/scale;
+      const int posy  = (circle->center[1] *piece->buf_in.height)/scale;
       const int posx_source = (d->spot[i].source[0]*piece->buf_in.width)/scale;
       const int posy_source = (d->spot[i].source[1]*piece->buf_in.height)/scale;      
-      const int rad = d->spot[i].spot.radius* MIN(piece->buf_in.width, piece->buf_in.height)/scale;
+      const int rad = circle->radius* MIN(piece->buf_in.width, piece->buf_in.height)/scale;
       //const int um = -MIN(rad, MIN(x, xc));
       //const int uM = MIN(rad, MIN(roi_in->width-1-xc, roi_in->width-1-x));
       //const int vm = -MIN(rad, MIN(y, yc));
@@ -674,8 +692,8 @@ void gui_post_expose(dt_iop_module_t *self, cairo_t *cr, int32_t width, int32_t 
       cairo_set_source_rgba(cr, .3, .3, .3, .8);
       if (g->dragging == i && !g->hoover_c)
       {
-        spt_x = p->spot[i].spot.center[0]*wd;
-        spt_y = p->spot[i].spot.center[1]*ht;
+        spt_x = g->form[i]->center[0]*wd;
+        spt_y = g->form[i]->center[1]*ht;
         float dx = spt_x - gspt.spot[0], dy = spt_y - gspt.spot[1];
         cairo_move_to(cr,gspt.spot[2]+dx,gspt.spot[3]+dy);
         for (int i=2; i<gspt.spot_count; i++)
@@ -737,9 +755,11 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
   gboolean old_border = g->border;
   g->selected = -1;
   g->border = FALSE;
+  
   if(g->dragging < 0) for(int i=0; i<p->num_spots; i++)
     {
       if (!g->spot[i].ok) continue;
+      
       float dist = (pzx*wd - g->spot[i].spot[0])*(pzx*wd - g->spot[i].spot[0]) + (pzy*ht - g->spot[i].spot[1])*(pzy*ht - g->spot[i].spot[1]);
       if(dist < mind)
       {
@@ -764,16 +784,16 @@ int mouse_moved(dt_iop_module_t *self, double x, double y, int which)
     }
     else
     {
-      p->spot[g->dragging].spot.center[0] = pzx;
-      p->spot[g->dragging].spot.center[0] = pzy;
+      g->form[g->dragging]->center[0] = pzx;
+      g->form[g->dragging]->center[0] = pzy;
     }
   }
-  if(selected >= 0 && mind < p->spot[selected].spot.radius * p->spot[selected].spot.radius * rf*rf)
+  if(selected >= 0 && mind < g->form[selected]->radius * g->form[selected]->radius * rf*rf)
   {
     g->selected = selected;
     g->hoover_c = hoover_c;
   }
-  else if(selected >= 0 && p->spot[selected].version > 1 && mind < (p->spot[selected].spot.radius + p->spot[selected].spot.border) * (p->spot[selected].spot.radius + p->spot[selected].spot.border) * rf*rf)
+  else if(selected >= 0 && p->spot[selected].version > 1 && mind < (g->form[selected]->radius + g->form[selected]->border) * (g->form[selected]->radius + g->form[selected]->border) * rf*rf)
   {
     g->selected = selected;
     g->border = TRUE;
@@ -789,6 +809,12 @@ int scrolled(dt_iop_module_t *self, double x, double y, int up, uint32_t state)
   dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *)self->gui_data;
   if(g->selected >= 0)
   {
+    //we get the spot
+    dt_masks_form_t *form = dt_masks_get_from_id(self->dev,p->spot[g->selected].formid);
+    if (!form) return 0;
+    dt_masks_point_circle_t *circle = dt_masks_get_circle(form);
+    if (!circle) return 0;
+    
     if ((state&GDK_CONTROL_MASK) == GDK_CONTROL_MASK)
     {
       if(up && p->spot[g->selected].opacity > 0.0f) p->spot[g->selected].opacity -= 0.05f;
@@ -796,16 +822,18 @@ int scrolled(dt_iop_module_t *self, double x, double y, int up, uint32_t state)
     }
     else if (g->border)
     {
-      if(up && p->spot[g->selected].spot.border > 0.002f) p->spot[g->selected].spot.border *= 0.9f;
-      else  if(p->spot[g->selected].spot.border < 0.1f  ) p->spot[g->selected].spot.border *= 1.0f/0.9f;
+      if(up && circle->border > 0.002f) circle->border *= 0.9f;
+      else  if(circle->border < 0.1f  ) circle->border *= 1.0f/0.9f;
+      dt_masks_write_form(form,self->dev);
       gui_spot_update_radius(self,&g->spot[g->selected],g->selected);
     }
     else
     {
-      if(up && p->spot[g->selected].spot.radius > 0.002f) p->spot[g->selected].spot.radius *= 0.9f;
-      else  if(p->spot[g->selected].spot.radius < 0.1f  ) p->spot[g->selected].spot.radius *= 1.0f/0.9f;
+      if(up && circle->radius > 0.002f) circle->radius *= 0.9f;
+      else  if(circle->radius < 0.1f  ) circle->radius *= 1.0f/0.9f;
+      dt_masks_write_form(form,self->dev);
       gui_spot_update_radius(self,&g->spot[g->selected],g->selected);
-      g->last_radius = p->spot[g->selected].spot.radius;
+      g->last_radius = circle->radius;
       dt_conf_set_float("ui_last/spot_size", g->last_radius);
     }
     dt_dev_add_history_item(darktable.develop, self, TRUE);
@@ -840,14 +868,23 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
       // on *wd|*ht scale, radius on *min(wd, ht).
       float wd = self->dev->preview_pipe->backbuf_width;
       float ht = self->dev->preview_pipe->backbuf_height;
-      p->spot[i].spot.radius = g->last_radius;
-      p->spot[i].spot.border = g->last_radius/2.0f;
+      dt_masks_form_t *form = dt_masks_create(DT_MASKS_CIRCLE);
+      dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) malloc(sizeof(dt_masks_point_circle_t));
+      printf("ok1\n");
+      form->points = g_list_append(form->points,circle);
+      printf("ok2\n");
+      circle->radius = g->last_radius;
+      circle->border = g->last_radius/2.0f;
+      p->spot[i].formid = form->formid;
       p->spot[i].opacity = 1.0f;
       p->spot[i].version = 2;
       float pts[2] = {pzx*wd,pzy*ht};
       dt_dev_distort_backtransform(self->dev,pts,1);
-      p->spot[i].spot.center[0] = p->spot[i].source[0] = pts[0]/self->dev->preview_pipe->iwidth;
-      p->spot[i].spot.center[1] = p->spot[i].source[1] = pts[1]/self->dev->preview_pipe->iheight;
+      circle->center[0] = p->spot[i].source[0] = pts[0]/self->dev->preview_pipe->iwidth;
+      circle->center[1] = p->spot[i].source[1] = pts[1]/self->dev->preview_pipe->iheight;
+      self->dev->forms = g_list_append(self->dev->forms,form);
+      dt_masks_write_form(form,self->dev);
+      g->form[i] = circle;
       gui_spot_add(self,&g->spot[i],i);
       g->selected = i;
       g->hoover_c = TRUE;
@@ -863,8 +900,8 @@ int button_pressed(dt_iop_module_t *self, double x, double y, int which, int typ
       }
       else
       {
-        p->spot[g->selected].spot.center[0] = pzx;
-        p->spot[g->selected].spot.center[1] = pzy;
+        g->form[g->selected]->center[0] = pzx;
+        g->form[g->selected]->center[1] = pzy;
       }
     }
     return 1;
@@ -896,8 +933,14 @@ int button_released(struct dt_iop_module_t *self, double x, double y, int which,
     }
     else
     {
-      p->spot[i].spot.center[0] = pts[0]/self->dev->preview_pipe->iwidth;
-      p->spot[i].spot.center[1] = pts[1]/self->dev->preview_pipe->iheight;
+      //we get the spot
+      dt_masks_form_t *form = dt_masks_get_from_id(self->dev,p->spot[i].formid);
+      if (!form) return 0;;
+      dt_masks_point_circle_t *circle = dt_masks_get_circle(form);
+      if (!circle) return 0;
+      circle->center[0] = pts[0]/self->dev->preview_pipe->iwidth;
+      circle->center[1] = pts[1]/self->dev->preview_pipe->iheight;
+      dt_masks_write_form(form,self->dev);
       gui_spot_update_spot(self,&g->spot[i],i);
     }
     g->selected = -1;
