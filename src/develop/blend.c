@@ -18,6 +18,7 @@
 #include "control/control.h"
 #include "develop/imageop.h"
 #include "develop/tiling.h"
+#include "develop/masks.h"
 #include "common/gaussian.h"
 #include "blend.h"
 
@@ -2052,11 +2053,12 @@ dt_develop_blend_legacy_params (dt_iop_module_t *module, const void *const old_p
   return 1;
 }
 
-int dt_develop_blend_add_form (dt_iop_module_t *module, double id, int state)
+int dt_develop_blend_add_form (dt_iop_module_t *module, double id, dt_develop_blend_form_states_t state)
 {
   dt_iop_gui_blend_data_t *bd = (dt_iop_gui_blend_data_t*)module->blend_data;
   
   //update params
+  int forms_count = module->blend_params->forms_count;
   module->blend_params->forms[forms_count] = id;
   module->blend_params->forms_state[forms_count] = state;
   
@@ -2070,6 +2072,13 @@ int dt_develop_blend_add_form (dt_iop_module_t *module, double id, int state)
   g_signal_connect(G_OBJECT(bd->form_label[forms_count]), "button-press-event", G_CALLBACK(dt_iop_gui_blend_setform_callback), module);
   
   module->blend_params->forms_count++;
+  
+  //show the form if needed
+  if (state & DT_BLEND_FORM_SHOW)
+  {
+    module->dev->form_visible = dt_masks_get_from_id(module->dev,id);
+  }
+  
   return 1;
 }
 

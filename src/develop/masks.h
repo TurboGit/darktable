@@ -71,6 +71,28 @@ typedef struct dt_masks_form_t
 }
 dt_masks_form_t;
 
+/** structure used to display a form */
+typedef struct dt_masks_form_gui_t
+{
+  //points used to draw the form
+  float *points;
+  int points_count;
+  float *border;
+  int border_count;
+  
+  //values for mouse positions, etc...
+  float posx, posy, dx, dy;
+  gboolean selected;
+  gboolean border_selected;
+  gboolean form_dragging;
+  int point_dragging;
+  
+  //ids
+  double formid;
+  uint64_t pipe_hash;
+}
+dt_masks_form_gui_t;
+
 dt_masks_point_circle_t *dt_masks_get_circle(dt_masks_form_t *form);
 
 /** get points in real space with respect of distortion dx and dy are used to eventually move the center of the circle */
@@ -92,6 +114,17 @@ void dt_masks_read_forms(dt_develop_t *dev);
 /** write the forms into the db */
 void dt_masks_write_form(dt_masks_form_t *form, dt_develop_t *dev);
 void dt_masks_write_forms(dt_develop_t *dev);
+
+
+/** function used to manipulate forms for masks */
+int dt_masks_mouse_moved (struct dt_iop_module_t *module, double x, double y, int which);
+int dt_masks_button_released (struct dt_iop_module_t *module, double x, double y, int which, uint32_t state);
+int dt_masks_button_pressed (struct dt_iop_module_t *module, double x, double y, int which, int type, uint32_t state);
+int dt_masks_scrolled (struct dt_iop_module_t *module, double x, double y, int up, uint32_t state);
+void dt_masks_post_expose (struct dt_iop_module_t *module, cairo_t *cr, int32_t width, int32_t height, int32_t pointerx, int32_t pointery);
+
+/** function to know if a point is inside a form return 1 if inside, 2 if inside border, 0 else*/
+void dt_masks_set_inside(float x, float y, dt_masks_form_gui_t *gui);
 
 #endif
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

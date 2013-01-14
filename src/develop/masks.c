@@ -15,6 +15,9 @@
     You should have received a copy of the GNU General Public License
     along with darktable.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include "develop/imageop.h"
+#include "control/control.h"
+#include "control/conf.h"
 #include "develop/masks.h"
 #include "common/debug.h"
 
@@ -317,6 +320,285 @@ void dt_masks_write_forms(dt_develop_t *dev)
     sqlite3_finalize (stmt);
     forms = g_list_next(forms);
   }  
+}
+
+
+static void _gui_form_create(dt_iop_module_t *module, dt_masks_form_t *form, dt_masks_form_gui_t *gui)
+{
+  gui->pipe_hash = gui->formid = gui->points_count = gui->border_count = 0;
+  
+  if (dt_masks_get_points(module->dev,form, &gui->points, &gui->points_count,0,0))
+  {
+    if (dt_masks_get_border(module->dev,form, &gui->border, &gui->border_count,0,0))
+    {
+      gui->pipe_hash = module->dev->preview_pipe->backbuf_hash;
+      gui->formid = form->formid;
+    }
+  }
+}
+static void _gui_form_remove(dt_iop_module_t *module, dt_masks_form_t *form, dt_masks_form_gui_t *gui)
+{
+  gui->pipe_hash = gui->formid = gui->points_count = gui->border_count = 0;
+  free(gui->points);
+  gui->points = NULL;
+  free(gui->border);
+  gui->border = NULL;
+}
+
+/*
+static void _gui_form_update_border(dt_iop_module_t *module, dt_masks_form_t *form, dt_masks_form_gui_t *gui)
+{
+  float *border;
+  int border_count;
+
+  if (dt_masks_get_border(module->dev,form, &border, &border_count,0,0))
+  {
+    gui->border = border;
+    gui->border_count = border_count;
+  }
+}
+*/
+static int _gui_form_test_create(dt_iop_module_t *module, dt_masks_form_t *form, dt_masks_form_gui_t *gui)
+{
+  //we test if the image has changed
+  if (gui->pipe_hash > 0)
+  {
+    if (gui->pipe_hash != module->dev->preview_pipe->backbuf_hash)
+    {
+      _gui_form_remove(module,form,gui);
+    }
+  }
+  
+  //we create the spots if needed
+  if (gui->pipe_hash == 0)
+  {
+    _gui_form_create(module,form,gui);
+  }
+  return 1;
+}
+
+int dt_masks_mouse_moved (struct dt_iop_module_t *module, double x, double y, int which)
+{
+  //dt_masks_form_t *form = module->dev->form_visible;
+  dt_masks_form_gui_t *gui = module->dev->form_gui;
+  
+  float pzx, pzy;
+  dt_dev_get_pointer_zoom_pos(module->dev, x, y, &pzx, &pzy);
+  pzx += 0.5f;
+  pzy += 0.5f;
+      
+  if (gui->form_dragging)
+  {
+    gui->posx = pzx;
+    gui->posy = pzy;
+    dt_control_queue_redraw_center();
+    return 0;
+  }
+  else
+  {
+    dt_masks_set_inside(pzx,pzy,gui);
+    dt_control_queue_redraw_center();
+    if (!gui->selected) return 1;
+    return 0;
+  }
+}
+int dt_masks_button_released (struct dt_iop_module_t *module, double x, double y, int which, uint32_t state)
+{
+  dt_masks_form_t *form = module->dev->form_visible;
+  dt_masks_form_gui_t *gui = module->dev->form_gui;
+  
+  if (form->type == DT_MASKS_CIRCLE)
+  {
+    if (gui->form_dragging)
+    {
+      //we get the circle
+      dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
+      
+      //we end the form dragging
+      gui->form_dragging = FALSE;
+      
+      //we change the center value
+      float pzx, pzy;
+      dt_dev_get_pointer_zoom_pos(module->dev, x, y, &pzx, &pzy);
+      pzx += 0.5f;
+      pzy += 0.5f;
+      float wd = module->dev->preview_pipe->backbuf_width;
+      float ht = module->dev->preview_pipe->backbuf_height;
+      float pts[2] = {pzx*wd,pzy*ht};
+      dt_dev_distort_backtransform(module->dev,pts,1);
+      circle->center[0] = pts[0]/module->dev->preview_pipe->iwidth;
+      circle->center[1] = pts[1]/module->dev->preview_pipe->iheight;
+      
+      //we recreate the form points
+      _gui_form_remove(module,form,gui);
+      _gui_form_create(module,form,gui);
+      
+      return 0;
+    }
+    return 1;
+  }
+  
+  return 0;
+}
+int dt_masks_button_pressed (struct dt_iop_module_t *module, double x, double y, int which, int type, uint32_t state)
+{
+  dt_masks_form_t *form = module->dev->form_visible;
+  dt_masks_form_gui_t *gui = module->dev->form_gui;
+  
+  if (form->type == DT_MASKS_CIRCLE)
+  {
+    if (gui->selected)
+    {
+      //we start the form dragging
+      gui->form_dragging = TRUE;
+      
+      dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
+      float pzx, pzy;
+      dt_dev_get_pointer_zoom_pos(module->dev, x, y, &pzx, &pzy);
+      gui->posx = pzx + 0.5f;
+      gui->posy = pzy + 0.5f;
+      gui->dx = circle->center[0] - gui->posx;
+      gui->dy = circle->center[1] - gui->posy;
+      return 0;
+    }
+    return 1;
+  }
+  
+  return 0;
+}
+int dt_masks_scrolled (struct dt_iop_module_t *module, double x, double y, int up, uint32_t state)
+{
+  
+  return 1;
+}
+void dt_masks_post_expose (struct dt_iop_module_t *module, cairo_t *cr, int32_t width, int32_t height, int32_t pointerx, int32_t pointery)
+{
+  dt_develop_t *dev = module->dev;
+  dt_masks_form_t *form = module->dev->form_visible;
+  dt_masks_form_gui_t *gui = module->dev->form_gui;
+  float wd = dev->preview_pipe->backbuf_width;
+  float ht = dev->preview_pipe->backbuf_height;
+  if (wd < 1.0 || ht < 1.0) return;
+  float pzx, pzy;
+  dt_dev_get_pointer_zoom_pos(dev, pointerx, pointery, &pzx, &pzy);
+  pzx += 0.5f;
+  pzy += 0.5f;
+  float zoom_x, zoom_y;
+  int32_t zoom, closeup;
+  DT_CTL_GET_GLOBAL(zoom_y, dev_zoom_y);
+  DT_CTL_GET_GLOBAL(zoom_x, dev_zoom_x);
+  DT_CTL_GET_GLOBAL(zoom, dev_zoom);
+  DT_CTL_GET_GLOBAL(closeup, dev_closeup);
+  float zoom_scale = dt_dev_get_zoom_scale(dev, zoom, closeup ? 2 : 1, 1);
+  
+  cairo_set_source_rgb(cr, .3, .3, .3);
+
+  cairo_translate(cr, width/2.0, height/2.0f);
+  cairo_scale(cr, zoom_scale, zoom_scale);
+  cairo_translate(cr, -.5f*wd-zoom_x*wd, -.5f*ht-zoom_y*ht);
+
+  double dashed[] = {4.0, 4.0};
+  dashed[0] /= zoom_scale;
+  dashed[1] /= zoom_scale;
+  int len  = sizeof(dashed) / sizeof(dashed[0]);
+  
+  cairo_set_line_cap(cr,CAIRO_LINE_CAP_ROUND);
+  
+  //we update the form if needed
+  if (!_gui_form_test_create(module,form,gui)) return;
+    
+  //draw form
+  if (gui->points_count > 6)
+  { 
+    cairo_set_dash(cr, dashed, 0, 0);     
+    if(gui->selected || gui->form_dragging) cairo_set_line_width(cr, 5.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 3.0/zoom_scale);
+    cairo_set_source_rgba(cr, .3, .3, .3, .8);
+    if (gui->form_dragging)
+    {
+      float dx = gui->posx + gui->dx - gui->points[0], dy = gui->posy + gui->dy - gui->points[1];
+      cairo_move_to(cr,gui->points[2]+dx,gui->points[3]+dy);
+      for (int i=2; i<gui->points_count; i++)
+      {
+        cairo_line_to(cr,gui->points[i*2]+dx,gui->points[i*2+1]+dy);
+      }
+      cairo_line_to(cr,gui->points[2]+dx,gui->points[3]+dy);
+    }
+    else
+    {
+      cairo_move_to(cr,gui->points[2],gui->points[3]);
+      for (int i=2; i<gui->points_count; i++)
+      {
+        cairo_line_to(cr,gui->points[i*2],gui->points[i*2+1]);
+      }
+      cairo_line_to(cr,gui->points[2],gui->points[3]);
+    }
+    cairo_stroke_preserve(cr);
+    if(gui->selected || gui->form_dragging) cairo_set_line_width(cr, 2.0/zoom_scale);
+    else                                     cairo_set_line_width(cr, 1.0/zoom_scale);
+    cairo_set_source_rgba(cr, .8, .8, .8, .8);
+    cairo_stroke(cr);
+  }
+
+  //draw border
+  if ((!gui->form_dragging) && gui->border_count > 6)
+  { 
+    cairo_set_dash(cr, dashed, len, 0);     
+    if(gui->border_selected) cairo_set_line_width(cr, 2.0/zoom_scale);
+    else                     cairo_set_line_width(cr, 1.0/zoom_scale);
+    cairo_set_source_rgba(cr, .3, .3, .3, .8);
+      
+    cairo_move_to(cr,gui->border[2],gui->border[3]);
+    for (int i=2; i<gui->border_count; i++)
+    {
+      cairo_line_to(cr,gui->border[i*2],gui->border[i*2+1]);
+    }
+    cairo_line_to(cr,gui->border[2],gui->border[3]);
+
+    cairo_stroke_preserve(cr);
+    if(gui->border_selected) cairo_set_line_width(cr, 2.0/zoom_scale);
+    else                     cairo_set_line_width(cr, 1.0/zoom_scale);
+    cairo_set_source_rgba(cr, .8, .8, .8, .8);
+    cairo_set_dash(cr, dashed, len, 4);
+    cairo_stroke(cr);
+  }
+}
+
+void dt_masks_set_inside(float x, float y, dt_masks_form_gui_t *gui)
+{
+  //we first check if it's inside borders
+  int nb = 0;
+  float last = -9999.0;
+  for (int i=0; i<gui->border_count; i++)
+  {
+    float yy = gui->border[i*2+1];
+    if (yy != last && yy == y)
+    {
+      if (gui->border[i*2] > x) nb++;
+    }
+    last = yy;
+  }  
+  if (!(nb & 1))
+  {
+    gui->selected = FALSE;
+    gui->border_selected = FALSE;
+    return;
+  }
+  gui->selected = TRUE;
+  
+  //and we check if it's inside form
+  nb = 0;
+  last = -9999.0;
+  for (int i=0; i<gui->points_count; i++)
+  {
+    float yy = gui->points[i*2+1];
+    if (yy != last && yy == y)
+    {
+      if (gui->points[i*2] > x) nb++;
+    }
+    last = yy;
+  }
+  gui->border_selected = !(nb & 1);
 }
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

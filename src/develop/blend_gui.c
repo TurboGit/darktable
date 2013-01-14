@@ -26,6 +26,7 @@
 #include "develop/develop.h"
 #include "develop/blend.h"
 #include "develop/tiling.h"
+#include "develop/masks.h"
 #include "gui/accelerators.h"
 #include "gui/gtk.h"
 #include "gui/presets.h"
@@ -932,7 +933,6 @@ void dt_iop_gui_cleanup_blending(dt_iop_module_t *module)
 void dt_iop_gui_update_blending(dt_iop_module_t *module)
 {
   dt_iop_gui_blend_data_t *bd = (dt_iop_gui_blend_data_t*)module->blend_data;
-  dt_develop_blend_params_t *bp = (dt_develop_blend_params_t*)module->blend_params;
 
   if (!(module->flags() & IOP_FLAGS_SUPPORTS_BLENDING) || !bd || !bd->blend_inited) return;
 
@@ -1069,7 +1069,7 @@ void dt_iop_gui_init_blending(GtkWidget *iopw, dt_iop_module_t *module)
     g_signal_connect (G_OBJECT (bd->blend_modes_combo), "value-changed",
                       G_CALLBACK (_blendop_mode_callback), bd);
 
-    gtk_box_pack_start(GTK_BOX(iopw), bd->form_box, TRUE, TRUE,0);
+    gtk_box_pack_start(GTK_BOX(iopw), GTK_WIDGET(bd->form_box), TRUE, TRUE,0);
     gtk_box_pack_start(GTK_BOX(iopw), bd->blend_modes_combo, TRUE, TRUE,0);
     gtk_box_pack_start(GTK_BOX(iopw), bd->opacity_slider, TRUE, TRUE,0);
 

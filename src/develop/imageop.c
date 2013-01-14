@@ -28,6 +28,7 @@
 #include "develop/develop.h"
 #include "develop/blend.h"
 #include "develop/tiling.h"
+#include "develop/masks.h"
 #include "gui/accelerators.h"
 #include "gui/gtk.h"
 #include "gui/presets.h"
@@ -1174,6 +1175,27 @@ dt_iop_gui_duplicate_callback(GtkButton *button, gpointer user_data)
 }
 
 static void
+dt_iop_gui_mask_add_spot(GtkButton *button, gpointer user_data)
+{
+  dt_iop_module_t *module = (dt_iop_module_t *)user_data;
+  
+  //we create the new form
+  dt_masks_form_t *spot = dt_masks_create(DT_MASKS_CIRCLE);
+  dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) malloc(sizeof(dt_masks_point_circle_t));
+  circle->center[0] = circle->center[1] = 0.5f;
+  circle->radius = 0.2f;
+  circle->border = 0.1f;
+  spot->points = g_list_append(spot->points,circle);
+  
+  //we add the new form to dev list
+  module->dev->forms = g_list_append(module->dev->forms,spot);
+  
+  //we add the form to iop blending
+  dt_develop_blend_add_form(module, spot->formid, DT_BLEND_FORM_SHOW | DT_BLEND_FORM_USE);
+  dt_control_queue_redraw_center();
+}
+
+static void
 dt_iop_gui_multimenu_callback(GtkButton *button, gpointer user_data)
 {
   dt_iop_module_t *module = (dt_iop_module_t *)user_data;
@@ -1205,6 +1227,11 @@ dt_iop_gui_multimenu_callback(GtkButton *button, gpointer user_data)
   gtk_widget_set_sensitive(item, module->multi_show_close);
   gtk_menu_append(menu, item);
 
+  item = gtk_menu_item_new_with_label(_("add circular mask"));
+  //g_object_set(G_OBJECT(item), "tooltip-text", _("delete this instance"), (char *)NULL);
+  g_signal_connect (G_OBJECT (item), "activate", G_CALLBACK (dt_iop_gui_mask_add_spot), module);
+  gtk_menu_append(menu, item);
+  
   gtk_widget_show_all(menu);
   //popup
   gtk_menu_popup (GTK_MENU (menu), NULL, NULL, NULL, NULL, 0, gtk_get_current_event_time());
