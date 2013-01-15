@@ -1048,9 +1048,10 @@ void dt_iop_gui_init_blending(GtkWidget *iopw, dt_iop_module_t *module)
     for (int i=0; i<module->blend_params->forms_count; i++)
     {
       char str[7];
-      snprintf(str,3,"form %d",i);
+      snprintf(str,7,"form %d",i);
       bd->form_label[i] = gtk_event_box_new();
       gtk_container_add(GTK_CONTAINER(bd->form_label[i]), gtk_label_new(str));
+      gtk_widget_show_all(bd->form_label[i]);
       g_object_set_data(G_OBJECT(bd->form_label[i]), "form", GUINT_TO_POINTER(i));
       g_signal_connect(G_OBJECT(bd->form_label[i]), "button-press-event", G_CALLBACK(dt_iop_gui_blend_setform_callback), module);
       gtk_box_pack_end(GTK_BOX(bd->form_box), bd->form_label[i], TRUE, TRUE,0);

@@ -389,14 +389,14 @@ int dt_masks_mouse_moved (struct dt_iop_module_t *module, double x, double y, in
       
   if (gui->form_dragging)
   {
-    gui->posx = pzx;
-    gui->posy = pzy;
+    gui->posx = pzx*module->dev->preview_pipe->backbuf_width;
+    gui->posy = pzy*module->dev->preview_pipe->backbuf_height;
     dt_control_queue_redraw_center();
     return 0;
   }
   else
   {
-    dt_masks_set_inside(pzx,pzy,gui);
+    dt_masks_set_inside(pzx*module->dev->preview_pipe->backbuf_width,pzy*module->dev->preview_pipe->backbuf_height,gui);
     dt_control_queue_redraw_center();
     if (!gui->selected) return 1;
     return 0;
@@ -424,7 +424,7 @@ int dt_masks_button_released (struct dt_iop_module_t *module, double x, double y
       pzy += 0.5f;
       float wd = module->dev->preview_pipe->backbuf_width;
       float ht = module->dev->preview_pipe->backbuf_height;
-      float pts[2] = {pzx*wd,pzy*ht};
+      float pts[2] = {pzx*wd+gui->dx,pzy*ht+gui->dy};
       dt_dev_distort_backtransform(module->dev,pts,1);
       circle->center[0] = pts[0]/module->dev->preview_pipe->iwidth;
       circle->center[1] = pts[1]/module->dev->preview_pipe->iheight;
@@ -432,6 +432,9 @@ int dt_masks_button_released (struct dt_iop_module_t *module, double x, double y
       //we recreate the form points
       _gui_form_remove(module,form,gui);
       _gui_form_create(module,form,gui);
+      
+      //we save the move
+      dt_dev_add_history_item(darktable.develop, module, TRUE);
       
       return 0;
     }
@@ -455,10 +458,10 @@ int dt_masks_button_pressed (struct dt_iop_module_t *module, double x, double y,
       dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
       float pzx, pzy;
       dt_dev_get_pointer_zoom_pos(module->dev, x, y, &pzx, &pzy);
-      gui->posx = pzx + 0.5f;
-      gui->posy = pzy + 0.5f;
-      gui->dx = circle->center[0] - gui->posx;
-      gui->dy = circle->center[1] - gui->posy;
+      gui->posx = (pzx + 0.5f)*module->dev->preview_pipe->backbuf_width;
+      gui->posy = (pzy + 0.5f)*module->dev->preview_pipe->backbuf_height;
+      gui->dx = circle->center[0]*module->dev->preview_pipe->backbuf_width - gui->posx;
+      gui->dy = circle->center[1]*module->dev->preview_pipe->backbuf_height - gui->posy;
       return 0;
     }
     return 1;
@@ -564,14 +567,14 @@ void dt_masks_post_expose (struct dt_iop_module_t *module, cairo_t *cr, int32_t 
   }
 }
 
-void dt_masks_set_inside(float x, float y, dt_masks_form_gui_t *gui)
+void dt_masks_set_inside(float x, int y, dt_masks_form_gui_t *gui)
 {
   //we first check if it's inside borders
   int nb = 0;
-  float last = -9999.0;
+  int last = -9999;
   for (int i=0; i<gui->border_count; i++)
   {
-    float yy = gui->border[i*2+1];
+    int yy = (int) gui->border[i*2+1];
     if (yy != last && yy == y)
     {
       if (gui->border[i*2] > x) nb++;
@@ -588,10 +591,10 @@ void dt_masks_set_inside(float x, float y, dt_masks_form_gui_t *gui)
   
   //and we check if it's inside form
   nb = 0;
-  last = -9999.0;
+  last = -9999;
   for (int i=0; i<gui->points_count; i++)
   {
-    float yy = gui->points[i*2+1];
+    int yy = (int) gui->points[i*2+1];
     if (yy != last && yy == y)
     {
       if (gui->points[i*2] > x) nb++;

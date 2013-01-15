@@ -124,7 +124,7 @@ int dt_masks_scrolled (struct dt_iop_module_t *module, double x, double y, int u
 void dt_masks_post_expose (struct dt_iop_module_t *module, cairo_t *cr, int32_t width, int32_t height, int32_t pointerx, int32_t pointery);
 
 /** function to know if a point is inside a form return 1 if inside, 2 if inside border, 0 else*/
-void dt_masks_set_inside(float x, float y, dt_masks_form_gui_t *gui);
+void dt_masks_set_inside(float x, int y, dt_masks_form_gui_t *gui);
 
 #endif
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

@@ -2064,9 +2064,10 @@ int dt_develop_blend_add_form (dt_iop_module_t *module, double id, dt_develop_bl
   
   //update gui
   char str[7];
-  snprintf(str,3,"form %d",forms_count);
+  snprintf(str,7,"form %d",forms_count);
   bd->form_label[forms_count] = gtk_event_box_new();
   gtk_container_add(GTK_CONTAINER(bd->form_label[forms_count]), gtk_label_new(str));
+  gtk_widget_show_all(bd->form_label[forms_count]);
   g_object_set_data(G_OBJECT(bd->form_label[forms_count]), "form", GUINT_TO_POINTER(forms_count));
   gtk_box_pack_end(GTK_BOX(bd->form_box), bd->form_label[forms_count], TRUE, TRUE,0);
   g_signal_connect(G_OBJECT(bd->form_label[forms_count]), "button-press-event", G_CALLBACK(dt_iop_gui_blend_setform_callback), module);
@@ -2078,6 +2079,7 @@ int dt_develop_blend_add_form (dt_iop_module_t *module, double id, dt_develop_bl
   {
     module->dev->form_visible = dt_masks_get_from_id(module->dev,id);
   }
+  dt_dev_add_history_item(darktable.develop, module, TRUE);
   
   return 1;
 }
