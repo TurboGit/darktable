@@ -944,6 +944,25 @@ void dt_iop_gui_update_blending(dt_iop_module_t *module)
 
   dt_iop_gui_update_blendif(module);
   
+  /* populate form_box */
+  GList *children = gtk_container_get_children(GTK_CONTAINER(bd->form_box));
+  if (g_list_length(children) == 0)
+  {
+    GList *iter;
+    for(iter = children; iter != NULL; iter = g_list_next(iter))
+      gtk_container_remove(GTK_CONTAINER(bd->form_box),GTK_WIDGET(iter->data));
+  
+    for (int i=0; i<module->blend_params->forms_count; i++)
+    {
+      dt_masks_form_t *form = dt_masks_get_from_id(module->dev,module->blend_params->forms[i]);
+      bd->form_label[i] = gtk_event_box_new();
+      gtk_container_add(GTK_CONTAINER(bd->form_label[i]), gtk_label_new(form->name));
+      gtk_widget_show_all(bd->form_label[i]);
+      g_object_set_data(G_OBJECT(bd->form_label[i]), "form", GUINT_TO_POINTER(i));
+      g_signal_connect(G_OBJECT(bd->form_label[i]), "button-press-event", G_CALLBACK(dt_iop_gui_blend_setform_callback), module);
+      gtk_box_pack_end(GTK_BOX(bd->form_box), bd->form_label[i], TRUE, TRUE,0);
+    }
+  }
   /* now show hide controls as required */
   if(bd->modes[dt_bauhaus_combobox_get(bd->blend_modes_combo)].mode == DEVELOP_BLEND_DISABLED)
   {
@@ -1044,18 +1063,7 @@ void dt_iop_gui_init_blending(GtkWidget *iopw, dt_iop_module_t *module)
     module->fusion_slider = bd->opacity_slider;
 
     bd->form_box = GTK_VBOX(gtk_vbox_new(FALSE,DT_GUI_IOP_MODULE_CONTROL_SPACING));
-    /* populate form_box */
-    for (int i=0; i<module->blend_params->forms_count; i++)
-    {
-      char str[7];
-      snprintf(str,7,"form %d",i);
-      bd->form_label[i] = gtk_event_box_new();
-      gtk_container_add(GTK_CONTAINER(bd->form_label[i]), gtk_label_new(str));
-      gtk_widget_show_all(bd->form_label[i]);
-      g_object_set_data(G_OBJECT(bd->form_label[i]), "form", GUINT_TO_POINTER(i));
-      g_signal_connect(G_OBJECT(bd->form_label[i]), "button-press-event", G_CALLBACK(dt_iop_gui_blend_setform_callback), module);
-      gtk_box_pack_end(GTK_BOX(bd->form_box), bd->form_label[i], TRUE, TRUE,0);
-    }
+
   
     for(int k = 0; k < bd->number_modes; k++)
       dt_bauhaus_combobox_add(bd->blend_modes_combo, bd->modes[k].name);
@@ -1096,7 +1104,9 @@ void dt_iop_gui_blend_setform_callback(GtkWidget *widget, GdkEventButton *e, dt_
   
   double formid = data->blend_params->forms[pos];
   
+  dt_masks_init_formgui(data->dev);
   data->dev->form_visible = dt_masks_get_from_id(data->dev,formid);
+  dt_control_queue_redraw_center();
 }
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

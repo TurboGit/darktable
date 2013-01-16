@@ -895,7 +895,11 @@ void enter(dt_view_t *self)
 
   dt_print(DT_DEBUG_CONTROL, "[run_job+] 11 %f in darkroom mode\n", dt_get_wtime());
   dt_develop_t *dev = (dt_develop_t *)self->data;
-  if (!dev->form_gui) dev->form_gui = (dt_masks_form_gui_t *) malloc(sizeof(dt_masks_form_gui_t));
+  if (!dev->form_gui) 
+  {
+    dev->form_gui = (dt_masks_form_gui_t *) malloc(sizeof(dt_masks_form_gui_t));
+    memset(dev->form_gui,0,sizeof(dt_masks_form_gui_t));
+  }
   dev->form_gui->pipe_hash = 0;
   dev->form_gui->formid = 0;
   dev->gui_leaving = 0;

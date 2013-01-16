@@ -63,9 +63,10 @@ typedef struct dt_masks_form_t
   GList *points;
   dt_masks_type_t type;
   
+  //name of the form
+  char name[128];
   //id used to store the form
-  double formid;
-  
+  double formid;  
   //version of the form
   int version;
 }
@@ -86,6 +87,8 @@ typedef struct dt_masks_form_gui_t
   gboolean border_selected;
   gboolean form_dragging;
   int point_dragging;
+  
+  gboolean creation;
   
   //ids
   double formid;
@@ -117,6 +120,8 @@ void dt_masks_write_forms(dt_develop_t *dev);
 
 
 /** function used to manipulate forms for masks */
+void dt_masks_init_formgui(dt_develop_t *dev);
+
 int dt_masks_mouse_moved (struct dt_iop_module_t *module, double x, double y, int which);
 int dt_masks_button_released (struct dt_iop_module_t *module, double x, double y, int which, uint32_t state);
 int dt_masks_button_pressed (struct dt_iop_module_t *module, double x, double y, int which, int type, uint32_t state);

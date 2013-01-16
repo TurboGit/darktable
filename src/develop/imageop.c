@@ -1181,17 +1181,20 @@ dt_iop_gui_mask_add_spot(GtkButton *button, gpointer user_data)
   
   //we create the new form
   dt_masks_form_t *spot = dt_masks_create(DT_MASKS_CIRCLE);
-  dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) malloc(sizeof(dt_masks_point_circle_t));
+  dt_masks_init_formgui(module->dev);
+  module->dev->form_visible = spot;
+  module->dev->form_gui->creation = TRUE;
+  /*dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) malloc(sizeof(dt_masks_point_circle_t));
   circle->center[0] = circle->center[1] = 0.5f;
-  circle->radius = 0.2f;
-  circle->border = 0.1f;
-  spot->points = g_list_append(spot->points,circle);
+  circle->radius = 0.1f;
+  circle->border = 0.05f;
+  spot->points = g_list_append(spot->points,circle);*/
   
   //we add the new form to dev list
-  module->dev->forms = g_list_append(module->dev->forms,spot);
+  //module->dev->forms = g_list_append(module->dev->forms,spot);
   
   //we add the form to iop blending
-  dt_develop_blend_add_form(module, spot->formid, DT_BLEND_FORM_SHOW | DT_BLEND_FORM_USE);
+  //dt_develop_blend_add_form(module, spot->formid, DT_BLEND_FORM_SHOW | DT_BLEND_FORM_USE);
   dt_control_queue_redraw_center();
 }
 

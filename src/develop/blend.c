@@ -299,7 +299,7 @@ static void _blend_make_mask(dt_iop_colorspace_type_t cst,const unsigned int ble
  
   for(int i=0, j=0; j<stride; i++, j+=4)
   {
-    mask[i] = opacity*_blendif_factor(cst,&a[j],&b[j],blendif,blendif_parameters);
+    mask[i] *= opacity*_blendif_factor(cst,&a[j],&b[j],blendif,blendif_parameters);
   }
 }
 
@@ -1566,11 +1566,15 @@ void dt_develop_blend_process (struct dt_iop_module_t *self, struct dt_dev_pixel
   _blend_row_func *blend = NULL;
   dt_develop_blend_params_t *d = (dt_develop_blend_params_t *)piece->blendop_data;
 
+  /* enable mode if there is some mask */
+  int mode = d->mode;
+  if (mode == 0 && self->blend_params->forms_count>0) mode = DEVELOP_BLEND_NORMAL;
+  
   /* check if blend is disabled */
-  if (!d || d->mode==0) return;
+  if (!d || mode==0) return;
 
   /* select the blend operator */
-  switch (d->mode)
+  switch (mode)
   {
     case DEVELOP_BLEND_LIGHTEN:
       blend = _blend_lighten;
@@ -1645,13 +1649,49 @@ void dt_develop_blend_process (struct dt_iop_module_t *self, struct dt_dev_pixel
 
   /* allocate space for blend mask */
   float *mask = dt_alloc_align(64, roi_out->width*roi_out->height*sizeof(float));
+  memset(mask,0,roi_out->width*roi_out->height*sizeof(float));
   if(!mask)
   {
     dt_control_log("could not allocate buffer for blending");
     return;
   }
-
-  if (!(d->mode & DEVELOP_BLEND_MASK_FLAG))
+  
+  //NOTE : add openmp pragma...
+  
+  /* set all masks to full opacity = 1.0f */
+  //for (int i=0; i<roi_out->width*roi_out->height; i++) mask[i] = 1.0f;
+  
+  /* apply masks if there's some */
+  for (int i=0; i<self->blend_params->forms_count; i++)
+  {
+    dt_masks_form_t *form = dt_masks_get_from_id(self->dev,self->blend_params->forms[i]);
+    if (!form) continue;
+    
+    //we get the mask
+    float *fm = NULL;
+    int fx,fy,fw,fh;
+    if (!dt_masks_get_mask(self,piece->pipe,roi_in->scale*piece->buf_in.width,roi_in->scale*piece->buf_in.height,
+                            form,&fm,&fw,&fh,&fx,&fy)) continue;
+    
+    //we don't want row which are outisde the roi_out
+    int fxx = fx;
+    int fww = fw;
+    if (fxx>roi_out->width) continue;
+    if (fxx<0) fww += fx, fxx=0;
+    if (fww+fxx>=roi_out->width) fww = roi_out->width-fxx-1;
+    //we apply the mask row by row
+    for (int yy=fy; yy<fy+fh; yy++)
+    {
+      if (yy<0 || yy>=roi_out->height) continue;
+      //we just do a memcopy, but it may be bettre (but slower) to compute each point if we have intersecting masks
+      memcpy(mask+yy*roi_out->width+fxx,fm+(yy-fy)*fw,sizeof(float)*fww);
+    }
+    
+    //we free the mask
+    if (fm) free(fm);
+  }
+  
+  if (!(mode & DEVELOP_BLEND_MASK_FLAG))
   {
     /* get the clipped opacity value  0 - 1 */
     const float opacity = fmin(fmax(0,(d->opacity/100.0f)),1.0f);
@@ -2056,17 +2096,19 @@ dt_develop_blend_legacy_params (dt_iop_module_t *module, const void *const old_p
 int dt_develop_blend_add_form (dt_iop_module_t *module, double id, dt_develop_blend_form_states_t state)
 {
   dt_iop_gui_blend_data_t *bd = (dt_iop_gui_blend_data_t*)module->blend_data;
+  dt_masks_form_t *form = dt_masks_get_from_id(module->dev,id);
+  if (!form) return 0;
   
   //update params
   int forms_count = module->blend_params->forms_count;
   module->blend_params->forms[forms_count] = id;
   module->blend_params->forms_state[forms_count] = state;
+  if (form->type == DT_MASKS_CIRCLE) snprintf(form->name,128,"mask circle #%d",forms_count);
+  dt_masks_write_form(form,module->dev);
   
   //update gui
-  char str[7];
-  snprintf(str,7,"form %d",forms_count);
   bd->form_label[forms_count] = gtk_event_box_new();
-  gtk_container_add(GTK_CONTAINER(bd->form_label[forms_count]), gtk_label_new(str));
+  gtk_container_add(GTK_CONTAINER(bd->form_label[forms_count]), gtk_label_new(form->name));
   gtk_widget_show_all(bd->form_label[forms_count]);
   g_object_set_data(G_OBJECT(bd->form_label[forms_count]), "form", GUINT_TO_POINTER(forms_count));
   gtk_box_pack_end(GTK_BOX(bd->form_box), bd->form_label[forms_count], TRUE, TRUE,0);
@@ -2078,6 +2120,7 @@ int dt_develop_blend_add_form (dt_iop_module_t *module, double id, dt_develop_bl
   if (state & DT_BLEND_FORM_SHOW)
   {
     module->dev->form_visible = dt_masks_get_from_id(module->dev,id);
+    module->dev->form_gui->formid = id;
   }
   dt_dev_add_history_item(darktable.develop, module, TRUE);
   

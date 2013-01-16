@@ -16,6 +16,7 @@
     along with darktable.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "develop/imageop.h"
+#include "develop/blend.h"
 #include "control/control.h"
 #include "control/conf.h"
 #include "develop/masks.h"
@@ -220,27 +221,29 @@ void dt_masks_read_forms(dt_develop_t *dev)
 
   sqlite3_stmt *stmt;
   DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db),
-      "select imgid, formid, form, version, points, points_count from mask where imgid = ?1", -1, &stmt, NULL);
+      "select imgid, formid, form, name, version, points, points_count from mask where imgid = ?1", -1, &stmt, NULL);
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
   
   while(sqlite3_step(stmt) == SQLITE_ROW)
   {
     // db record:
-    // 0-img, 1-formid, 2-form_type, 3-version, 4-points, 5-points_count
+    // 0-img, 1-formid, 2-form_type, 3-name, 4-version, 5-points, 6-points_count
     
     //we get the values
     dt_masks_form_t *form = (dt_masks_form_t *)malloc(sizeof(dt_masks_form_t));
     form->formid = sqlite3_column_double(stmt, 1);
     form->type = sqlite3_column_int(stmt, 2);
-    form->version = sqlite3_column_int(stmt, 3);
+    const char *name = (const char *)sqlite3_column_text(stmt, 3);
+    snprintf(form->name,128,"%s",name);
+    form->version = sqlite3_column_int(stmt, 4);
     form->points = NULL;
-    //int nb_points = sqlite3_column_int(stmt, 5);
+    //int nb_points = sqlite3_column_int(stmt, 6);
     
     //and now we "read" the blob
     if (form->type == DT_MASKS_CIRCLE)
     {
       dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *)malloc(sizeof(dt_masks_point_circle_t));
-      memcpy(circle, sqlite3_column_blob(stmt, 4), sizeof(dt_masks_point_circle_t));
+      memcpy(circle, sqlite3_column_blob(stmt, 5), sizeof(dt_masks_point_circle_t));
       form->points = g_list_append(form->points,circle);
     }
     else if(form->type == DT_MASKS_BEZIER)
@@ -261,21 +264,22 @@ void dt_masks_write_form(dt_masks_form_t *form, dt_develop_t *dev)
   sqlite3_stmt *stmt;
   DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "delete from mask where imgid = ?1 and formid = ?2", -1, &stmt, NULL);
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
-  DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 1, form->formid);
+  DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 2, form->formid);
   sqlite3_step(stmt);
   sqlite3_finalize (stmt);
   
   //and we write the form
-  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into mask (imgid, formid, form, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6)", -1, &stmt, NULL);
+  DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into mask (imgid, formid, form, name, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)", -1, &stmt, NULL);
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
   DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 2, form->formid);
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 3, form->type);
-  DT_DEBUG_SQLITE3_BIND_INT(stmt, 4, form->version);
+  DT_DEBUG_SQLITE3_BIND_TEXT(stmt, 4, form->name, strlen(form->name), SQLITE_TRANSIENT);
+  DT_DEBUG_SQLITE3_BIND_INT(stmt, 5, form->version);
   if (form->type == DT_MASKS_CIRCLE)
   {
     dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
-    DT_DEBUG_SQLITE3_BIND_BLOB(stmt, 5, circle, sizeof(dt_masks_point_circle_t), SQLITE_TRANSIENT);
-    DT_DEBUG_SQLITE3_BIND_INT(stmt, 6, 1);
+    DT_DEBUG_SQLITE3_BIND_BLOB(stmt, 6, circle, sizeof(dt_masks_point_circle_t), SQLITE_TRANSIENT);
+    DT_DEBUG_SQLITE3_BIND_INT(stmt, 7, 1);
   }
   else if (form->type == DT_MASKS_BEZIER)
   {
@@ -301,15 +305,16 @@ void dt_masks_write_forms(dt_develop_t *dev)
   {
     dt_masks_form_t *form = (dt_masks_form_t *) forms->data;
 
-    DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into mask (imgid, formid, form, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6)", -1, &stmt, NULL);
+    DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "insert into mask (imgid, formid, form, name, version, points, points_count) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)", -1, &stmt, NULL);
     DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, dev->image_storage.id);
     DT_DEBUG_SQLITE3_BIND_DOUBLE(stmt, 2, form->formid);
     DT_DEBUG_SQLITE3_BIND_INT(stmt, 3, form->type);
-    DT_DEBUG_SQLITE3_BIND_INT(stmt, 4, form->version);
+    DT_DEBUG_SQLITE3_BIND_TEXT(stmt, 4, form->name, strlen(form->name), SQLITE_TRANSIENT);
+    DT_DEBUG_SQLITE3_BIND_INT(stmt, 5, form->version);
     if (form->type == DT_MASKS_CIRCLE)
     {
-      DT_DEBUG_SQLITE3_BIND_BLOB(stmt, 5, form->points, sizeof(dt_masks_point_circle_t), SQLITE_TRANSIENT);
-      DT_DEBUG_SQLITE3_BIND_INT(stmt, 6, 1);
+      DT_DEBUG_SQLITE3_BIND_BLOB(stmt, 6, form->points, sizeof(dt_masks_point_circle_t), SQLITE_TRANSIENT);
+      DT_DEBUG_SQLITE3_BIND_INT(stmt, 7, 1);
     }
     else if (form->type == DT_MASKS_BEZIER)
     {
@@ -339,25 +344,26 @@ static void _gui_form_create(dt_iop_module_t *module, dt_masks_form_t *form, dt_
 static void _gui_form_remove(dt_iop_module_t *module, dt_masks_form_t *form, dt_masks_form_gui_t *gui)
 {
   gui->pipe_hash = gui->formid = gui->points_count = gui->border_count = 0;
-  free(gui->points);
+  if (gui->points) free(gui->points);
   gui->points = NULL;
-  free(gui->border);
+  if (gui->border) free(gui->border);
   gui->border = NULL;
 }
 
-/*
+
 static void _gui_form_update_border(dt_iop_module_t *module, dt_masks_form_t *form, dt_masks_form_gui_t *gui)
 {
   float *border;
   int border_count;
-
+  
   if (dt_masks_get_border(module->dev,form, &border, &border_count,0,0))
   {
+    if (gui->border) free(gui->border);
     gui->border = border;
     gui->border_count = border_count;
   }
 }
-*/
+
 static int _gui_form_test_create(dt_iop_module_t *module, dt_masks_form_t *form, dt_masks_form_gui_t *gui)
 {
   //we test if the image has changed
@@ -377,6 +383,33 @@ static int _gui_form_test_create(dt_iop_module_t *module, dt_masks_form_t *form,
   return 1;
 }
 
+static void _gui_form_save_creation(dt_iop_module_t *module, dt_masks_form_t *form, dt_masks_form_gui_t *gui)
+{
+  module->dev->forms = g_list_append(module->dev->forms,form);
+  gui->creation = FALSE;
+  
+  //update params
+  int forms_count = module->blend_params->forms_count;
+  module->blend_params->forms[forms_count] = form->formid;
+  module->blend_params->forms_state[forms_count] = DT_BLEND_FORM_SHOW | DT_BLEND_FORM_USE;
+  if (form->type == DT_MASKS_CIRCLE) snprintf(form->name,128,"mask circle #%d",forms_count);
+  dt_masks_write_form(form,module->dev);
+  
+  //update gui
+  dt_iop_gui_blend_data_t *bd = (dt_iop_gui_blend_data_t*)module->blend_data;
+  bd->form_label[forms_count] = gtk_event_box_new();
+  gtk_container_add(GTK_CONTAINER(bd->form_label[forms_count]), gtk_label_new(form->name));
+  gtk_widget_show_all(bd->form_label[forms_count]);
+  g_object_set_data(G_OBJECT(bd->form_label[forms_count]), "form", GUINT_TO_POINTER(forms_count));
+  gtk_box_pack_end(GTK_BOX(bd->form_box), bd->form_label[forms_count], TRUE, TRUE,0);
+  g_signal_connect(G_OBJECT(bd->form_label[forms_count]), "button-press-event", G_CALLBACK(dt_iop_gui_blend_setform_callback), module);
+  
+  module->blend_params->forms_count++;
+  
+  //show the form if needed
+  module->dev->form_gui->formid = form->formid;
+}
+
 int dt_masks_mouse_moved (struct dt_iop_module_t *module, double x, double y, int which)
 {
   //dt_masks_form_t *form = module->dev->form_visible;
@@ -394,13 +427,14 @@ int dt_masks_mouse_moved (struct dt_iop_module_t *module, double x, double y, in
     dt_control_queue_redraw_center();
     return 0;
   }
-  else
+  else if (!gui->creation)
   {
     dt_masks_set_inside(pzx*module->dev->preview_pipe->backbuf_width,pzy*module->dev->preview_pipe->backbuf_height,gui);
     dt_control_queue_redraw_center();
     if (!gui->selected) return 1;
     return 0;
   }
+  return 1;
 }
 int dt_masks_button_released (struct dt_iop_module_t *module, double x, double y, int which, uint32_t state)
 {
@@ -409,7 +443,38 @@ int dt_masks_button_released (struct dt_iop_module_t *module, double x, double y
   
   if (form->type == DT_MASKS_CIRCLE)
   {
-    if (gui->form_dragging)
+    if (gui->creation)
+    {
+      //we create the circle
+      dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (malloc(sizeof(dt_masks_point_circle_t)));
+      
+      //we change the center value
+      float pzx, pzy;
+      dt_dev_get_pointer_zoom_pos(module->dev, x, y, &pzx, &pzy);
+      pzx += 0.5f;
+      pzy += 0.5f;
+      float wd = module->dev->preview_pipe->backbuf_width;
+      float ht = module->dev->preview_pipe->backbuf_height;
+      float pts[2] = {pzx*wd,pzy*ht};
+      dt_dev_distort_backtransform(module->dev,pts,1);
+      circle->center[0] = pts[0]/module->dev->preview_pipe->iwidth;
+      circle->center[1] = pts[1]/module->dev->preview_pipe->iheight;
+      circle->radius = 0.1f;
+      circle->border = 0.05f;
+      form->points = g_list_append(form->points,circle);
+      
+      _gui_form_save_creation(module,form,gui);
+      
+      //we recreate the form points
+      _gui_form_remove(module,form,gui);
+      _gui_form_create(module,form,gui);
+      
+      //we save the move
+      dt_dev_add_history_item(darktable.develop, module, TRUE);
+      
+      return 0;
+    }
+    else if (gui->form_dragging)
     {
       //we get the circle
       dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
@@ -428,7 +493,7 @@ int dt_masks_button_released (struct dt_iop_module_t *module, double x, double y
       dt_dev_distort_backtransform(module->dev,pts,1);
       circle->center[0] = pts[0]/module->dev->preview_pipe->iwidth;
       circle->center[1] = pts[1]/module->dev->preview_pipe->iheight;
-      
+      dt_masks_write_form(form,module->dev);
       //we recreate the form points
       _gui_form_remove(module,form,gui);
       _gui_form_create(module,form,gui);
@@ -450,7 +515,7 @@ int dt_masks_button_pressed (struct dt_iop_module_t *module, double x, double y,
   
   if (form->type == DT_MASKS_CIRCLE)
   {
-    if (gui->selected)
+    if (gui->selected && !gui->creation)
     {
       //we start the form dragging
       gui->form_dragging = TRUE;
@@ -471,7 +536,33 @@ int dt_masks_button_pressed (struct dt_iop_module_t *module, double x, double y,
 }
 int dt_masks_scrolled (struct dt_iop_module_t *module, double x, double y, int up, uint32_t state)
 {
+  dt_masks_form_t *form = module->dev->form_visible;
+  dt_masks_form_gui_t *gui = module->dev->form_gui;
   
+  if (form->type == DT_MASKS_CIRCLE)
+  {
+    if (gui->selected)
+    {
+      dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *) (g_list_first(form->points)->data);
+      if (gui->border_selected)
+      {
+        if(up && circle->border > 0.002f) circle->border *= 0.9f;
+        else  if(circle->border < 0.1f  ) circle->border *= 1.0f/0.9f;
+        dt_masks_write_form(form,module->dev);
+        _gui_form_update_border(module,form,gui);
+      }
+      else
+      {
+        if(up && circle->radius > 0.002f) circle->radius *= 0.9f;
+        else  if(circle->radius < 0.1f  ) circle->radius *= 1.0f/0.9f;
+        dt_masks_write_form(form,module->dev);
+        _gui_form_remove(module,form,gui);
+        _gui_form_create(module,form,gui);
+      }
+      dt_dev_add_history_item(darktable.develop, module, TRUE);
+      return 0;
+    }
+  }
   return 1;
 }
 void dt_masks_post_expose (struct dt_iop_module_t *module, cairo_t *cr, int32_t width, int32_t height, int32_t pointerx, int32_t pointery)
@@ -479,6 +570,9 @@ void dt_masks_post_expose (struct dt_iop_module_t *module, cairo_t *cr, int32_t 
   dt_develop_t *dev = module->dev;
   dt_masks_form_t *form = module->dev->form_visible;
   dt_masks_form_gui_t *gui = module->dev->form_gui;
+  //if it's a spot in creation, nothing to draw
+  if (form->type == DT_MASKS_CIRCLE && gui->creation) return;
+  
   float wd = dev->preview_pipe->backbuf_width;
   float ht = dev->preview_pipe->backbuf_height;
   if (wd < 1.0 || ht < 1.0) return;
@@ -602,6 +696,19 @@ void dt_masks_set_inside(float x, int y, dt_masks_form_gui_t *gui)
     last = yy;
   }
   gui->border_selected = !(nb & 1);
+}
+
+void dt_masks_init_formgui(dt_develop_t *dev)
+{
+  dev->form_gui->pipe_hash = dev->form_gui->formid = dev->form_gui->points_count = dev->form_gui->border_count = 0;
+  if (dev->form_gui->points) free(dev->form_gui->points);
+  dev->form_gui->points = NULL;
+  if (dev->form_gui->border) free(dev->form_gui->border);
+  dev->form_gui->border = NULL;
+  dev->form_gui->posx = dev->form_gui->posy = dev->form_gui->dx = dev->form_gui->dy = 0.0f;
+  dev->form_gui->selected = dev->form_gui->border_selected = dev->form_gui->form_dragging = FALSE;
+  dev->form_gui->point_dragging = -1;
+  dev->form_gui->creation = FALSE;
 }
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
