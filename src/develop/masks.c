@@ -560,10 +560,10 @@ int dt_masks_scrolled (struct dt_iop_module_t *module, double x, double y, int u
         _gui_form_create(module,form,gui);
       }
       dt_dev_add_history_item(darktable.develop, module, TRUE);
-      return 0;
+      return 1;
     }
   }
-  return 1;
+  return 0;
 }
 void dt_masks_post_expose (struct dt_iop_module_t *module, cairo_t *cr, int32_t width, int32_t height, int32_t pointerx, int32_t pointery)
 {

@@ -1683,7 +1683,7 @@ void dt_develop_blend_process (struct dt_iop_module_t *self, struct dt_dev_pixel
     for (int yy=fy; yy<fy+fh; yy++)
     {
       if (yy<0 || yy>=roi_out->height) continue;
-      //we just do a memcopy, but it may be bettre (but slower) to compute each point if we have intersecting masks
+      //we just do a memcopy, but it may be better (but slower) to compute each point if we have intersecting masks
       memcpy(mask+yy*roi_out->width+fxx,fm+(yy-fy)*fw,sizeof(float)*fww);
     }
     

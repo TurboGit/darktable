@@ -1793,6 +1793,10 @@ void dt_iop_request_focus(dt_iop_module_t *module)
       dt_dev_invalidate_from_gui(darktable.develop);
 
     dt_accel_disconnect_locals_iop(darktable.develop->gui_module);
+    
+    /*reset mask view */
+    darktable.develop->form_visible = NULL;
+    dt_masks_init_formgui(darktable.develop);
   }
 
   darktable.develop->gui_module = module;

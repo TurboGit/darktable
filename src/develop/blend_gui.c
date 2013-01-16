@@ -1098,8 +1098,6 @@ void dt_iop_gui_blend_setform_callback(GtkWidget *widget, GdkEventButton *e, dt_
   int pos = -1;
   pos = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(widget), "form"));
   
-  printf("click %d\n",pos);
-  
   if (pos < 0) return;
   
   double formid = data->blend_params->forms[pos];
