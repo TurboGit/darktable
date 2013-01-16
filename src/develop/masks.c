@@ -494,6 +494,7 @@ int dt_masks_button_released (struct dt_iop_module_t *module, double x, double y
       circle->center[0] = pts[0]/module->dev->preview_pipe->iwidth;
       circle->center[1] = pts[1]/module->dev->preview_pipe->iheight;
       dt_masks_write_form(form,module->dev);
+      module->blend_params->mask_change  = (module->blend_params->mask_change + 1) % 10000;
       //we recreate the form points
       _gui_form_remove(module,form,gui);
       _gui_form_create(module,form,gui);
@@ -548,6 +549,7 @@ int dt_masks_scrolled (struct dt_iop_module_t *module, double x, double y, int u
       {
         if(up && circle->border > 0.002f) circle->border *= 0.9f;
         else  if(circle->border < 0.1f  ) circle->border *= 1.0f/0.9f;
+        module->blend_params->mask_change  = (module->blend_params->mask_change + 1) % 10000;
         dt_masks_write_form(form,module->dev);
         _gui_form_update_border(module,form,gui);
       }
@@ -555,6 +557,7 @@ int dt_masks_scrolled (struct dt_iop_module_t *module, double x, double y, int u
       {
         if(up && circle->radius > 0.002f) circle->radius *= 0.9f;
         else  if(circle->radius < 0.1f  ) circle->radius *= 1.0f/0.9f;
+        module->blend_params->mask_change  = (module->blend_params->mask_change + 1) % 10000;
         dt_masks_write_form(form,module->dev);
         _gui_form_remove(module,form,gui);
         _gui_form_create(module,form,gui);

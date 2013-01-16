@@ -2010,8 +2010,6 @@ tiling_callback_blendop (struct dt_iop_module_t *self, struct dt_dev_pixelpipe_i
 int
 dt_develop_blend_legacy_params (dt_iop_module_t *module, const void *const old_params, const int old_version, void *new_params, const int new_version, const int length)
 {
-
-
   if(old_version == 1 && new_version == 5)
   {
     if(length != sizeof(dt_develop_blend_params1_t)) return 1;
@@ -2026,6 +2024,7 @@ dt_develop_blend_legacy_params (dt_iop_module_t *module, const void *const old_p
     n->mask_id = o->mask_id;
     n->radius = 0.0f;
     n->forms_count = 0;
+    n->mask_change = 0;
     return 0;
   }
 
@@ -2043,6 +2042,7 @@ dt_develop_blend_legacy_params (dt_iop_module_t *module, const void *const old_p
     n->mask_id = o->mask_id;
     n->radius = 0.0f;
     n->forms_count = 0;
+    n->mask_change = 0;
     n->blendif = o->blendif & ((1<<31) | 0xff);  // only just in case: knock out all bits which were undefined in version 2
     for(int i=0; i<(4*8); i++)
       n->blendif_parameters[i] = o->blendif_parameters[i];
@@ -2065,6 +2065,7 @@ dt_develop_blend_legacy_params (dt_iop_module_t *module, const void *const old_p
     n->radius = 0.0f;
     n->blendif = o->blendif;
     n->forms_count = 0;
+    n->mask_change = 0;
     memcpy(n->blendif_parameters, o->blendif_parameters, 4*DEVELOP_BLENDIF_SIZE*sizeof(float));
 
     return 0;
@@ -2085,6 +2086,7 @@ dt_develop_blend_legacy_params (dt_iop_module_t *module, const void *const old_p
     n->radius = o->radius;
     n->blendif = o->blendif;
     n->forms_count = 0;
+    n->mask_change = 0;
     memcpy(n->blendif_parameters, o->blendif_parameters, 4*DEVELOP_BLENDIF_SIZE*sizeof(float));
 
     return 0;

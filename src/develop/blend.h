@@ -188,6 +188,8 @@ typedef struct dt_develop_blend_params_t
   dt_develop_blend_form_states_t forms_state[64];
   /** number of masks */
   int forms_count;
+  //quick and dirty hack to abuse cache and say "hey, the mask has changed"
+  int mask_change;
 }
 dt_develop_blend_params_t;
 
