@@ -234,6 +234,8 @@ typedef struct dt_iop_module_t
   gboolean local_closures_connected;
   /** the corresponding SO object */
   dt_iop_module_so_t *so;
+  /** blendif param copy from */
+  struct dt_iop_module_t *copy_to;
 
   /** multi-instances things */
   int multi_priority; //user may change this

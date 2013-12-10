@@ -580,6 +580,57 @@ _blendop_blendif_reset(GtkButton *button, dt_iop_module_t *module)
 }
 
 static void
+_pick_callback(GtkMenuItem *menuitem, dt_iop_module_t *module)
+{
+  memcpy(module->copy_to->blend_params->blendif_parameters, module->blend_params->blendif_parameters, 4*DEVELOP_BLENDIF_SIZE*sizeof(float));
+  dt_iop_gui_update_blendif(module->copy_to);
+  dt_dev_add_history_item(darktable.develop, module->copy_to, TRUE);
+}
+
+static void
+_blendop_blendif_copy(GtkButton *button, dt_iop_module_t *module)
+{
+  GtkMenu *menu = GTK_MENU(gtk_menu_new());
+  GtkWidget *mi;
+  GList *iops = g_list_first(darktable.develop->iop);
+  gboolean has_blendif = false;
+
+  while (iops)
+  {
+    dt_iop_module_t *iop = (dt_iop_module_t *)iops->data;
+
+    if (strcmp(module->name(),iop->name()) // not if this is the current module
+        && (iop->flags() & IOP_FLAGS_SUPPORTS_BLENDING) // only if iop support blending
+        && (iop->blend_params->blendif != iop->default_blendop_params->blendif)) // and it is not set to default params
+    {
+      char label[128];
+      if (iop->multi_name[0] == '\0' || !strcmp(iop->multi_name,"0"))
+        snprintf(label, 128, "%s", iop->name());
+      else
+        snprintf(label, 128, "%s %s", iop->name(), iop->multi_name);
+      mi = gtk_menu_item_new_with_label(label);
+      gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
+      iop->copy_to = module;
+      g_signal_connect(G_OBJECT(mi), "activate", G_CALLBACK(_pick_callback), iop);
+      has_blendif = true;
+    }
+    iops = g_list_next(iops);
+  }
+
+  // if no blendif found on this image, still add an entry into the menu as information
+
+  if (!has_blendif)
+  {
+    mi = gtk_menu_item_new_with_label(_("no blendif defined"));
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
+  }
+
+  gtk_menu_popup(menu, NULL, NULL, 0, button, 0, gtk_get_current_event_time());
+  gtk_widget_show_all(GTK_WIDGET(menu));
+  gtk_menu_reposition(GTK_MENU(menu));
+}
+
+static void
 _blendop_blendif_invert(GtkButton *button, dt_iop_module_t *module)
 {
   if(darktable.gui->reset) return;
@@ -1076,8 +1127,12 @@ void dt_iop_gui_init_blendif(GtkVBox *blendw, dt_iop_module_t *module)
     GtkWidget *inv = dtgtk_button_new(dtgtk_cairo_paint_invert, CPF_STYLE_FLAT);
     g_object_set(G_OBJECT(inv), "tooltip-text", _("invert all channel's polarities"), (char *)NULL);
 
+    GtkWidget *copy = dtgtk_button_new(dtgtk_cairo_paint_dropdown, CPF_STYLE_FLAT);
+    g_object_set(G_OBJECT(copy), "tooltip-text", _("copy blend mask from another module"), (char *)NULL);
+
     gtk_box_pack_start(GTK_BOX(header), GTK_WIDGET(notebook), TRUE, TRUE, 0);
     gtk_box_pack_end(GTK_BOX(header), GTK_WIDGET(res), FALSE, FALSE, 0);
+    gtk_box_pack_end(GTK_BOX(header), GTK_WIDGET(copy), FALSE, FALSE, 0);
     gtk_box_pack_end(GTK_BOX(header), GTK_WIDGET(inv), FALSE, FALSE, 0);
     gtk_box_pack_end(GTK_BOX(header), GTK_WIDGET(bd->colorpicker), FALSE, FALSE, 0);
 
@@ -1144,6 +1199,9 @@ void dt_iop_gui_init_blendif(GtkVBox *blendw, dt_iop_module_t *module)
 
     g_signal_connect (G_OBJECT(res), "clicked",
                       G_CALLBACK (_blendop_blendif_reset), module);
+
+    g_signal_connect (G_OBJECT(copy), "clicked",
+                      G_CALLBACK (_blendop_blendif_copy), module);
 
     g_signal_connect (G_OBJECT(inv), "clicked",
                       G_CALLBACK (_blendop_blendif_invert), module);
