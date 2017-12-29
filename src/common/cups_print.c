@@ -45,6 +45,62 @@ void dt_init_print_info(dt_print_info_t *pinfo)
   *pinfo->printer.profile = '\0';
 }
 
+static void _parse_ipp_attr(http_t *http, cups_dest_t *dest, cups_dinfo_t *dinfo, const char *option, dt_printer_info_t *pinfo)
+{
+  ipp_attribute_t *attr = cupsFindDestSupported(http, dest, dinfo, option);
+
+  if (attr)
+    {
+      if (strcmp(option, "printer-resolution")==0)
+        {
+          int yres;
+          ipp_res_t units = IPP_RES_PER_INCH;
+          ippGetResolution(attr, 0, &yres, &units);
+
+          if (units == IPP_RES_PER_CM)
+            yres /= 2.54;
+
+          while(yres>360)
+            yres /= 2.0;
+
+          pinfo->resolution = yres;
+        }
+
+      /*  Parse sub-options in media-col to get the media-x-magin */
+
+      else if (strcmp(option, "media-col")==0)
+        {
+          // paper sizes
+          const int count = ippGetCount(attr);
+          for (int i = 0; i < count; i ++)
+          {
+            _parse_ipp_attr(http, dest, dinfo, ippGetString(attr, i, NULL), pinfo);
+          }
+        }
+
+      /*  Each media-x-margin value is a non-negative integer in hundredths of millimeters or
+          1/2540th of an inch and specifies a hardware margin supported by the Printer.
+      */
+
+      else if (strcmp(option, "media-bottom-margin")==0)
+        {
+          pinfo->hw_margin_bottom = ippGetInteger(attr, 0) / 100.0;
+        }
+      else if (strcmp(option, "media-top-margin")==0)
+        {
+          pinfo->hw_margin_top = ippGetInteger(attr, 0) / 100.0;
+        }
+      else if (strcmp(option, "media-left-margin")==0)
+        {
+          pinfo->hw_margin_left = ippGetInteger(attr, 0) / 100.0;
+        }
+      else if (strcmp(option, "media-right-margin")==0)
+        {
+          pinfo->hw_margin_right = ippGetInteger(attr, 0) / 100.0;
+        }
+    }
+}
+
 void dt_get_printer_info(const char *printer_name, dt_printer_info_t *pinfo)
 {
   cups_dest_t *dests;
@@ -53,62 +109,39 @@ void dt_get_printer_info(const char *printer_name, dt_printer_info_t *pinfo)
 
   if (dest)
   {
-    const char *PPDFile = cupsGetPPD (printer_name);
+    const char *uri = cupsGetOption("printer-uri-supported", dest->num_options, dest->options);
+
+    /* we have a TruboPrint driver either if zedoPrinterDriver is defined or if TurboPrint is
+       found in the printer name */
+    const char *is_turboprint1 = cupsGetOption("zedoPrinterDriver", dest->num_options, dest->options);
+    const char *is_turboprint2 = cupsGetOption("printer-make-and-model", dest->num_options, dest->options);
+
+    pinfo->is_turboprint = (is_turboprint1 || strstr(is_turboprint2, "TurboPrint")) ? TRUE : FALSE;
+
     g_strlcpy(pinfo->name, dest->name, MAX_NAME);
-    ppd_file_t *ppd = ppdOpenFile(PPDFile);
 
-    if (ppd)
+    dest = cupsGetDestWithURI(NULL, uri);
+
+    if (dest)
     {
-      ppdMarkDefaults(ppd);
-      cupsMarkOptions(ppd, dest->num_options, dest->options);
+      http_t *http = cupsConnectDest(dest, CUPS_DEST_FLAGS_NONE, 30000, NULL, NULL, 0, NULL, NULL);
 
-      // first check if this is turboprint drived printer, two solutions:
-      // 1. ModelName constains TurboPrint
-      // 2. zedoPrinterDriver exists
-      ppd_attr_t *attr = ppdFindAttr(ppd, "ModelName", NULL);
-
-      if (attr)
+      if (http)
       {
-        pinfo->is_turboprint = strstr(attr->value, "TurboPrint") != NULL;
+        cups_dinfo_t *dinfo = cupsCopyDestInfo (http, dest);
+
+        ipp_attribute_t *attr = cupsFindDestSupported(http, dest, dinfo, "job-creation-attributes");
+
+        if (attr)
+        {
+          const int count = ippGetCount(attr);
+          for (int i = 0; i < count; i ++)
+            _parse_ipp_attr(http, dest, dinfo, ippGetString(attr, i, NULL), pinfo);
+        }
+
+        cupsFreeDestInfo(dinfo);
+        httpClose(http);
       }
-
-      // hardware margins
-
-      attr = ppdFindAttr(ppd, "HWMargins", NULL);
-
-      if (attr)
-      {
-        sscanf(attr->value, "%lf %lf %lf %lf",
-               &pinfo->hw_margin_left, &pinfo->hw_margin_bottom,
-               &pinfo->hw_margin_right, &pinfo->hw_margin_top);
-
-        pinfo->hw_margin_left   = dt_pdf_point_to_mm (pinfo->hw_margin_left);
-        pinfo->hw_margin_bottom = dt_pdf_point_to_mm (pinfo->hw_margin_bottom);
-        pinfo->hw_margin_right  = dt_pdf_point_to_mm (pinfo->hw_margin_right);
-        pinfo->hw_margin_top    = dt_pdf_point_to_mm (pinfo->hw_margin_top);
-      }
-
-      // default resolution
-
-      attr = ppdFindAttr(ppd, "DefaultResolution", NULL);
-
-      if (attr)
-      {
-        char *x = strstr(attr->value, "x");
-
-        if (x)
-          sscanf (x+1, "%ddpi", &pinfo->resolution);
-        else
-          sscanf (attr->value, "%ddpi", &pinfo->resolution);
-      }
-      else
-        pinfo->resolution = 300;
-
-      while(pinfo->resolution>360)
-        pinfo->resolution /= 2.0;
-
-      ppdClose(ppd);
-      g_unlink(PPDFile);
     }
   }
 
