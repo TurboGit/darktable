@@ -339,6 +339,7 @@ void do_1 (void)
 
 void do_attr(http_t *http, cups_dest_t *dest, cups_dinfo_t *dinfo, const char *option)
 {
+  cups_lang_t *language = cupsLangDefault();
   ipp_attribute_t *attr = cupsFindDestSupported(http, dest, dinfo, option);
 
   if (attr)
@@ -397,11 +398,14 @@ void do_attr(http_t *http, cups_dest_t *dest, cups_dinfo_t *dinfo, const char *o
         }
       else if (strcmp(option, "media-type")==0)
         {
+          const char *lang = "fr";
+          printf("language : %s\n", language->language);
           const int count = ippGetCount(attr);
           printf("media-type %d\n", count);
           for (int i = 0; i < count; i ++)
           {
-            printf("   format: %s\n", ippGetString(attr, i, NULL));
+            printf("   format: %s \t\t %s\n", ippGetString(attr, i, NULL),
+                   cupsLocalizeDestValue(http, dest, dinfo, option, ippGetString(attr, i, NULL)));
           }
         }
       else if (strcmp(option, "job-sheets")==0)
@@ -452,8 +456,8 @@ void do_attr(http_t *http, cups_dest_t *dest, cups_dinfo_t *dinfo, const char *o
 void do_2 (void)
 {
   //const char *printer_name = "Lexmark-X950";
-  //const char *printer_name = "Epson3880";
-  const char *printer_name = "PDF";
+  const char *printer_name = "Epson3880";
+  //const char *printer_name = "PDF";
   //const char *printer_name = "Epson_Stylus_Pro_3880";
   //const char *printer_name = "SP-3880-TurboPrint-Luster";
 
@@ -489,13 +493,14 @@ void do_2 (void)
 
   if (dest)
     {
-      http_t *http = cupsConnectDest(dest, CUPS_DEST_FLAGS_DEVICE/*NONE|DEVICE*/, 30000, NULL, NULL, 0, NULL, NULL);
+      http_t *http = cupsConnectDest(dest, CUPS_DEST_FLAGS_NONE/*NONE|DEVICE*/, 30000, NULL, NULL, 0, NULL, NULL);
 
       if (http)
         {
           cups_dinfo_t *dinfo = cupsCopyDestInfo (http, dest);
 
-          ipp_attribute_t *attr = cupsFindDestSupported(http, dest, dinfo, "job-creation-attributes");
+//          ipp_attribute_t *attr = cupsFindDestSupported(http, dest, dinfo, "job-creation-attributes");
+          ipp_attribute_t *attr = cupsFindDestSupported(http, dest, dinfo, "media-type");
 //          ipp_attribute_t *attr = cupsFindDestSupported(http, dest, dinfo, "printer-info");
 
           if (attr)
@@ -505,10 +510,11 @@ void do_2 (void)
 //              do_attr(http, dest, dinfo, "document-format");
 //              do_attr(http, dest, dinfo, "media-type");
               for (int i = 0; i < count; i ++)
-                do_attr(http, dest, dinfo, ippGetString(attr, i, NULL));
-            }
+                printf("   format: %s \t\t %s\n", ippGetString(attr, i, NULL),
+                       cupsLocalizeDestValue(http, dest, dinfo, "media-type", ippGetString(attr, i, NULL)));
 
-          return;
+//                do_attr(http, dest, dinfo, ippGetString(attr, i, NULL));
+            }
 
           // on the following code we do not get the borderless papers?
           // size.{bottom,left,right,top} are the margins for the paper, seems like a better option
@@ -522,13 +528,17 @@ void do_2 (void)
           {
             if (cupsGetDestMediaByIndex(http, dest, dinfo, k, CUPS_MEDIA_FLAGS_DEFAULT, &size))
             {
+              printf("Localize: %s\n", cupsLocalizeDestMedia(http, dest, dinfo, CUPS_MEDIA_FLAGS_DEFAULT, &size));
               if (size.width!=0 && size.length!=0)
               {
                 pwg_media_t *med = pwgMediaForPWG (size.media);
                 char common_name[1000] = { 0 };
 
                 if (med->ppd)
+                {
                   strncpy(common_name, med->ppd, sizeof(common_name));
+                  // this is equivalent to cupsLocalizeDestMedia() above
+                }
                 else
                   strncpy(common_name, size.media, sizeof(common_name));
 
