@@ -138,7 +138,7 @@ void hw_margins(cups_dest_t *dest, http_t *hcon, cups_dinfo_t *info)
               switch (ippGetValueTag(attr))
                 {
                 case IPP_TAG_INTEGER :
-                  printf("IPP: hw margin-%s   %2.4f\n", name[k], ippGetInteger(attr, 0) / 100.0); // hw margins
+                  printf("IPP: hw margin-%s'   '%2.4f'\n", name[k], ippGetInteger(attr, 0) / 100.0); // hw margins
                   break;
 
                 default:
@@ -277,10 +277,12 @@ void do_1 (void)
 {
   //const char *printer_uri = "ipp://localhost:631/printers/SP-3880-TurboPrint-Luster";
   //const char *printer_name = "Epson_Stylus_Pro_3880";
-  const char *printer_name = "SP-3880-TurboPrint-Luster";
+  //const char *printer_name = "Epson3880";
+  const char *printer_name = "PDF";
+  //const char *printer_name = "SP-3880-TurboPrint-Luster";
   //const char *printer_name = "HP_ENVY_7640_series_lancelot";
   //const char *printer_name = "HP_ENVY_7640_series_7BC99B_";
-//  const char *printer_name = "Virtual_PDF_Printer";
+  //const char *printer_name = "Virtual_PDF_Printer";
 
   //const char *printer_name = "Lexmark-X950";
 
@@ -302,23 +304,23 @@ void do_1 (void)
 
     if (dest)
     {
-      http_t *hcon = cupsConnectDest(dest, CUPS_DEST_FLAGS_NONE/*NONE|DEVICE*/, 2000, NULL, NULL, 0, NULL, NULL);
+      http_t *hcon = cupsConnectDest(dest, CUPS_DEST_FLAGS_DEVICE/*NONE|DEVICE*/, 30000, NULL, NULL, 0, NULL, NULL);
 
       if (hcon)
       {
         cups_dinfo_t *info = cupsCopyDestInfo (hcon, dest);
 
         is_turboprint_ppd(printer_name); printf("\n");
-        is_turboprint(dest, hcon, info); printf("\n");
+        //is_turboprint(dest, hcon, info); printf("\n");
 
         hw_margins_ppd(printer_name); printf("\n");
-        hw_margins(dest, hcon, info); printf("\n");
+        //hw_margins(dest, hcon, info); printf("\n");
 
         resolution_ppd(printer_name); printf("\n");
-        resolution(dest, hcon, info); printf("\n");
+        //resolution(dest, hcon, info); printf("\n");
 
         media_type_ppd(printer_name); printf("\n");
-        media_type(dest, hcon, info); printf("\n");
+        //media_type(dest, hcon, info); printf("\n");
 
         cupsFreeDestInfo(info);
         httpClose(hcon);
@@ -329,7 +331,7 @@ void do_1 (void)
     else
       printf("dest is null\n");
 
-    //    cupsFreeDests(num_dests, dests);
+    cupsFreeDests(num_dests, dests);
   }
 }
 
@@ -350,8 +352,8 @@ void do_attr(http_t *http, cups_dest_t *dest, cups_dinfo_t *dinfo, const char *o
             yres /= 2.0;
           printf("IPP: resolution   %d\n", yres); // hw margins
         }
-
 #if 0
+      // media: A4, B0... but without the sizes/borders, better getDestMediaCount() see do_2
       else if (strcmp(option, "media")==0)
         {
           // paper sizes
@@ -359,7 +361,6 @@ void do_attr(http_t *http, cups_dest_t *dest, cups_dinfo_t *dinfo, const char *o
           printf("option %s %d\n", option, count);
           for (int i = 0; i < count; i ++)
             {
-              //              const char *lvalue = cupsLocalizeDestValue(http, dest, dinfo, option, ippGetString(attr, i, NULL));
               const char *lvalue = cupsLocalizeDestValue(http, dest, dinfo, option, ippGetString(attr, i, NULL));
               printf("  %s | %s\n", ippGetString(attr, i, NULL), lvalue?lvalue:"not localized");
             }
@@ -383,6 +384,43 @@ void do_attr(http_t *http, cups_dest_t *dest, cups_dinfo_t *dinfo, const char *o
           printf("media-size %d\n", count);
           for (int i = 0; i < count; i ++)
             do_attr(http, dest, dinfo, ippGetString(attr, i, NULL));
+        }
+      else if (strcmp(option, "document-format")==0)
+        {
+          const int count = ippGetCount(attr);
+          printf("document-format %d\n", count);
+          for (int i = 0; i < count; i ++)
+          {
+            printf("   format: %s\n", ippGetString(attr, i, NULL));
+            do_attr(http, dest, dinfo, ippGetString(attr, i, NULL));
+          }
+        }
+      else if (strcmp(option, "media-type")==0)
+        {
+          const int count = ippGetCount(attr);
+          printf("media-type %d\n", count);
+          for (int i = 0; i < count; i ++)
+          {
+            printf("   format: %s\n", ippGetString(attr, i, NULL));
+          }
+        }
+      else if (strcmp(option, "job-sheets")==0)
+        {
+          const int count = ippGetCount(attr);
+          printf("job-sheets %d\n", count);
+          for (int i = 0; i < count; i ++)
+          {
+            printf("   qual: %s\n", ippGetString(attr, i, NULL));
+          }
+        }
+      else if (strcmp(option, "print-quality")==0)
+        {
+          const int count = ippGetCount(attr);
+          printf("print-quality %d\n", count);
+          for (int i = 0; i < count; i ++)
+          {
+            printf("   print-quality: %d\n", ippGetInteger(attr, i));
+          }
         }
       else if (strcmp(option, "media-bottom-margin")==0)
         {
@@ -414,8 +452,10 @@ void do_attr(http_t *http, cups_dest_t *dest, cups_dinfo_t *dinfo, const char *o
 void do_2 (void)
 {
   //const char *printer_name = "Lexmark-X950";
+  //const char *printer_name = "Epson3880";
+  const char *printer_name = "PDF";
   //const char *printer_name = "Epson_Stylus_Pro_3880";
-  const char *printer_name = "SP-3880-TurboPrint-Luster";
+  //const char *printer_name = "SP-3880-TurboPrint-Luster";
 
   cups_dest_t *dests;
   int num_dests = cupsGetDests(&dests);
@@ -462,10 +502,13 @@ void do_2 (void)
             {
               const int count = ippGetCount(attr);
               printf("count: %d\n", count);
+//              do_attr(http, dest, dinfo, "document-format");
+//              do_attr(http, dest, dinfo, "media-type");
               for (int i = 0; i < count; i ++)
                 do_attr(http, dest, dinfo, ippGetString(attr, i, NULL));
             }
 
+          return;
 
           // on the following code we do not get the borderless papers?
           // size.{bottom,left,right,top} are the margins for the paper, seems like a better option

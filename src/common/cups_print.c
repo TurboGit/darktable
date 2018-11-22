@@ -28,6 +28,8 @@
 #include "control/jobs/control_jobs.h"
 #include "cups_print.h"
 
+// #define USE_PPD
+
 typedef struct dt_prtctl_t
 {
   void (*cb)(dt_printer_info_t *, void *);
@@ -330,6 +332,7 @@ GList *dt_get_papers(const dt_printer_info_t *printer)
   }
 #endif
 
+#if USE_PPD
   // check now PPD page sizes
 
   const char *PPDFile = cupsGetPPD(printer_name);
@@ -360,6 +363,7 @@ GList *dt_get_papers(const dt_printer_info_t *printer)
     ppdClose(ppd);
     g_unlink(PPDFile);
   }
+#endif
 
   result = g_list_sort_with_data (result, (GCompareDataFunc)sort_papers, NULL);
   return result;
@@ -367,9 +371,10 @@ GList *dt_get_papers(const dt_printer_info_t *printer)
 
 GList *dt_get_media_type(const dt_printer_info_t *printer)
 {
-  const char *printer_name = printer->name;
   GList *result = NULL;
 
+#if USE_PPD
+  const char *printer_name = printer->name;
   // check now PPD media type
 
   const char *PPDFile = cupsGetPPD(printer_name);
@@ -398,6 +403,7 @@ GList *dt_get_media_type(const dt_printer_info_t *printer)
 
   ppdClose(ppd);
   g_unlink(PPDFile);
+#endif
 
   return result;
 }
