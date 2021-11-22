@@ -1090,6 +1090,7 @@ static inline gboolean _is_another_module_cat_on_pipe(struct dt_iop_module_t *se
 static void update_illuminants(struct dt_iop_module_t *self);
 static void update_approx_cct(struct dt_iop_module_t *self);
 static void update_illuminant_color(struct dt_iop_module_t *self);
+static void paint_temperature_background(struct dt_iop_module_t *self);
 
 
 static void check_if_close_to_daylight(const float x, const float y, float *temperature,
@@ -2574,7 +2575,7 @@ static void commit_profile_callback(GtkWidget *widget, GdkEventButton *event, gp
 
   ++darktable.gui->reset;
   dt_bauhaus_combobox_set(g->illuminant, p->illuminant);
-  dt_bauhaus_slider_set(g->temperature, p->temperature);
+  dt_bauhaus_slider_set_soft(g->temperature, p->temperature);
 
   dt_aligned_pixel_t xyY = { p->x, p->y, 1.f };
   dt_aligned_pixel_t Lch = { 0 };
@@ -2623,7 +2624,7 @@ static void _develop_ui_pipe_finished_callback(gpointer instance, gpointer user_
 
   ++darktable.gui->reset;
 
-  dt_bauhaus_slider_set(g->temperature, p->temperature);
+  dt_bauhaus_slider_set_soft(g->temperature, p->temperature);
   dt_bauhaus_combobox_set(g->illuminant, p->illuminant);
   dt_bauhaus_combobox_set(g->adaptation, p->adaptation);
 
@@ -2636,6 +2637,7 @@ static void _develop_ui_pipe_finished_callback(gpointer instance, gpointer user_
   update_illuminants(self);
   update_approx_cct(self);
   update_illuminant_color(self);
+  paint_temperature_background(self);
 
   --darktable.gui->reset;
 
@@ -2947,7 +2949,8 @@ static void update_xy_color(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->illum_y, stop, RGB[0], RGB[1], RGB[2]);
   }
 
-  gtk_widget_queue_draw(self->widget);
+  gtk_widget_queue_draw(g->illum_x);
+  gtk_widget_queue_draw(g->illum_y);
 }
 
 static void _convert_GUI_colors(dt_iop_channelmixer_rgb_params_t *p,
@@ -2999,8 +3002,8 @@ static void update_R_colors(dt_iop_module_t *self)
   }
 
   // Get the current values bound of the slider, taking into account the possible soft rescaling
-  const float RR_min = DT_BAUHAUS_WIDGET(g->scale_red_R)->data.slider.soft_min;
-  const float RR_max = DT_BAUHAUS_WIDGET(g->scale_red_R)->data.slider.soft_max;
+  const float RR_min = DT_BAUHAUS_WIDGET(g->scale_red_R)->data.slider.min;
+  const float RR_max = DT_BAUHAUS_WIDGET(g->scale_red_R)->data.slider.max;
   const float RR_range = RR_max - RR_min;
 
   for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
@@ -3014,8 +3017,8 @@ static void update_R_colors(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->scale_red_R, stop, RGB_t[0], RGB_t[1], RGB_t[2]);
   }
 
-  const float RG_min = DT_BAUHAUS_WIDGET(g->scale_red_G)->data.slider.soft_min;
-  const float RG_max = DT_BAUHAUS_WIDGET(g->scale_red_G)->data.slider.soft_max;
+  const float RG_min = DT_BAUHAUS_WIDGET(g->scale_red_G)->data.slider.min;
+  const float RG_max = DT_BAUHAUS_WIDGET(g->scale_red_G)->data.slider.max;
   const float RG_range = RG_max - RG_min;
 
   for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
@@ -3029,8 +3032,8 @@ static void update_R_colors(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->scale_red_G, stop, RGB_t[0], RGB_t[1], RGB_t[2]);
   }
 
-  const float RB_min = DT_BAUHAUS_WIDGET(g->scale_red_B)->data.slider.soft_min;
-  const float RB_max = DT_BAUHAUS_WIDGET(g->scale_red_B)->data.slider.soft_max;
+  const float RB_min = DT_BAUHAUS_WIDGET(g->scale_red_B)->data.slider.min;
+  const float RB_max = DT_BAUHAUS_WIDGET(g->scale_red_B)->data.slider.max;
   const float RB_range = RB_max - RB_min;
 
   for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
@@ -3044,7 +3047,9 @@ static void update_R_colors(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->scale_red_B, stop, RGB_t[0], RGB_t[1], RGB_t[2]);
   }
 
-  gtk_widget_queue_draw(self->widget);
+  gtk_widget_queue_draw(g->scale_red_R);
+  gtk_widget_queue_draw(g->scale_red_G);
+  gtk_widget_queue_draw(g->scale_red_B);
 }
 
 
@@ -3065,8 +3070,8 @@ static void update_B_colors(dt_iop_module_t *self)
   }
 
   // Get the current values bound of the slider, taking into account the possible soft rescaling
-  const float BR_min = DT_BAUHAUS_WIDGET(g->scale_blue_R)->data.slider.soft_min;
-  const float BR_max = DT_BAUHAUS_WIDGET(g->scale_blue_R)->data.slider.soft_max;
+  const float BR_min = DT_BAUHAUS_WIDGET(g->scale_blue_R)->data.slider.min;
+  const float BR_max = DT_BAUHAUS_WIDGET(g->scale_blue_R)->data.slider.max;
   const float BR_range = BR_max - BR_min;
 
   for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
@@ -3080,8 +3085,8 @@ static void update_B_colors(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->scale_blue_R, stop, RGB_t[0], RGB_t[1], RGB_t[2]);
   }
 
-  const float BG_min = DT_BAUHAUS_WIDGET(g->scale_blue_G)->data.slider.soft_min;
-  const float BG_max = DT_BAUHAUS_WIDGET(g->scale_blue_G)->data.slider.soft_max;
+  const float BG_min = DT_BAUHAUS_WIDGET(g->scale_blue_G)->data.slider.min;
+  const float BG_max = DT_BAUHAUS_WIDGET(g->scale_blue_G)->data.slider.max;
   const float BG_range = BG_max - BG_min;
 
   for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
@@ -3095,8 +3100,8 @@ static void update_B_colors(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->scale_blue_G, stop, RGB_t[0], RGB_t[1], RGB_t[2]);
   }
 
-  const float BB_min = DT_BAUHAUS_WIDGET(g->scale_blue_B)->data.slider.soft_min;
-  const float BB_max = DT_BAUHAUS_WIDGET(g->scale_blue_B)->data.slider.soft_max;
+  const float BB_min = DT_BAUHAUS_WIDGET(g->scale_blue_B)->data.slider.min;
+  const float BB_max = DT_BAUHAUS_WIDGET(g->scale_blue_B)->data.slider.max;
   const float BB_range = BB_max - BB_min;
 
   for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
@@ -3110,7 +3115,9 @@ static void update_B_colors(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->scale_blue_B, stop, RGB_t[0], RGB_t[1], RGB_t[2]);
   }
 
-  gtk_widget_queue_draw(self->widget);
+  gtk_widget_queue_draw(g->scale_blue_R);
+  gtk_widget_queue_draw(g->scale_blue_G);
+  gtk_widget_queue_draw(g->scale_blue_B);
 }
 
 static void update_G_colors(dt_iop_module_t *self)
@@ -3130,8 +3137,8 @@ static void update_G_colors(dt_iop_module_t *self)
   }
 
   // Get the current values bound of the slider, taking into account the possible soft rescaling
-  const float GR_min = DT_BAUHAUS_WIDGET(g->scale_green_R)->data.slider.soft_min;
-  const float GR_max = DT_BAUHAUS_WIDGET(g->scale_green_R)->data.slider.soft_max;
+  const float GR_min = DT_BAUHAUS_WIDGET(g->scale_green_R)->data.slider.min;
+  const float GR_max = DT_BAUHAUS_WIDGET(g->scale_green_R)->data.slider.max;
   const float GR_range = GR_max - GR_min;
 
   for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
@@ -3145,8 +3152,8 @@ static void update_G_colors(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->scale_green_R, stop, RGB_t[0], RGB_t[1], RGB_t[2]);
   }
 
-  const float GG_min = DT_BAUHAUS_WIDGET(g->scale_green_G)->data.slider.soft_min;
-  const float GG_max = DT_BAUHAUS_WIDGET(g->scale_green_G)->data.slider.soft_max;
+  const float GG_min = DT_BAUHAUS_WIDGET(g->scale_green_G)->data.slider.min;
+  const float GG_max = DT_BAUHAUS_WIDGET(g->scale_green_G)->data.slider.max;
   const float GG_range = GG_max - GG_min;
 
   for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
@@ -3160,8 +3167,8 @@ static void update_G_colors(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->scale_green_G, stop, RGB_t[0], RGB_t[1], RGB_t[2]);
   }
 
-  const float GB_min = DT_BAUHAUS_WIDGET(g->scale_green_B)->data.slider.soft_min;
-  const float GB_max = DT_BAUHAUS_WIDGET(g->scale_green_B)->data.slider.soft_max;
+  const float GB_min = DT_BAUHAUS_WIDGET(g->scale_green_B)->data.slider.min;
+  const float GB_max = DT_BAUHAUS_WIDGET(g->scale_green_B)->data.slider.max;
   const float GB_range = GB_max - GB_min;
 
   for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
@@ -3175,7 +3182,29 @@ static void update_G_colors(dt_iop_module_t *self)
     dt_bauhaus_slider_set_stop(g->scale_green_B, stop, RGB_t[0], RGB_t[1], RGB_t[2]);
   }
 
-  gtk_widget_queue_draw(self->widget);
+  gtk_widget_queue_draw(g->scale_green_R);
+  gtk_widget_queue_draw(g->scale_green_G);
+  gtk_widget_queue_draw(g->scale_green_B);
+}
+
+static void paint_temperature_background(struct dt_iop_module_t *self)
+{
+  dt_iop_channelmixer_rgb_gui_data_t *g = (dt_iop_channelmixer_rgb_gui_data_t *)self->gui_data;
+
+  const float max_temp = DT_BAUHAUS_WIDGET(g->temperature)->data.slider.max;
+  const float min_temp = DT_BAUHAUS_WIDGET(g->temperature)->data.slider.min;
+  const float temp_range = max_temp - min_temp;
+
+  for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
+  {
+    const float stop = ((float)i / (float)(DT_BAUHAUS_SLIDER_MAX_STOPS - 1));
+    const float t = min_temp + stop * temp_range;
+    dt_aligned_pixel_t RGB = { 0 };
+    illuminant_CCT_to_RGB(t, RGB);
+    dt_bauhaus_slider_set_stop(g->temperature, stop, RGB[0], RGB[1], RGB[2]);
+  }
+
+  gtk_widget_queue_draw(g->temperature);
 }
 
 
@@ -3304,9 +3333,10 @@ static void illum_xy_callback(GtkWidget *slider, gpointer user_data)
   p->temperature = t;
 
   ++darktable.gui->reset;
-  dt_bauhaus_slider_set(g->temperature, p->temperature);
+  dt_bauhaus_slider_set_soft(g->temperature, p->temperature);
   update_approx_cct(self);
   update_illuminant_color(self);
+  paint_temperature_background(self);
   --darktable.gui->reset;
 
   dt_dev_add_history_item(darktable.develop, self, TRUE);
@@ -3343,7 +3373,7 @@ void gui_update(struct dt_iop_module_t *self)
   dt_bauhaus_combobox_set(g->illuminant, p->illuminant);
   dt_bauhaus_combobox_set(g->illum_fluo, p->illum_fluo);
   dt_bauhaus_combobox_set(g->illum_led, p->illum_led);
-  dt_bauhaus_slider_set(g->temperature, p->temperature);
+  dt_bauhaus_slider_set_soft(g->temperature, p->temperature);
   dt_bauhaus_slider_set_soft(g->gamut, p->gamut);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g->clip), p->clip);
 
@@ -3486,7 +3516,8 @@ void reload_defaults(dt_iop_module_t *module)
     if(dt_image_is_matrix_correction_supported(img))
     {
       if(dt_bauhaus_combobox_length(g->illuminant) < DT_ILLUMINANT_CAMERA + 1)
-        dt_bauhaus_combobox_add(g->illuminant, _("as shot in camera"));
+        dt_bauhaus_combobox_add_full(g->illuminant, _("as shot in camera"), DT_BAUHAUS_COMBOBOX_ALIGN_RIGHT,
+                                     GINT_TO_POINTER(DT_ILLUMINANT_CAMERA), NULL, TRUE);
     }
     else
       dt_bauhaus_combobox_remove_at(g->illuminant, DT_ILLUMINANT_CAMERA);
@@ -3502,6 +3533,22 @@ void gui_changed(dt_iop_module_t *self, GtkWidget *w, void *previous)
 
   if(w == g->illuminant)
   {
+    if(previous)
+    {
+      dt_illuminant_t *prev_illuminant = (dt_illuminant_t *)previous;
+      if(*prev_illuminant == DT_ILLUMINANT_CAMERA)
+      {
+        // If illuminant was previously set with "as set in camera",
+        // when changing it, we need to ensure the temperature and chromaticity
+        // are inited with the correct values taken from camera EXIF.
+        // Otherwise, if using a preset defining illuminant = "as set in camera",
+        // temperature and chromaticity are inited with the preset content when illuminant is changed.
+        dt_aligned_pixel_t custom_wb;
+        get_white_balance_coeff(self, custom_wb);
+        find_temperature_from_raw_coeffs(&(self->dev->image_storage), custom_wb, &(p->x), &(p->y));
+        check_if_close_to_daylight(p->x, p->y, &(p->temperature), NULL, &(p->adaptation));
+      }
+    }
     if(p->illuminant == DT_ILLUMINANT_CAMERA)
     {
       // Get camera WB and update illuminant
@@ -3558,7 +3605,10 @@ void gui_changed(dt_iop_module_t *self, GtkWidget *w, void *previous)
     if(Lch[1] > 0)
       dt_bauhaus_slider_set(g->illum_x, Lch[2] / M_PI * 180.f);
     dt_bauhaus_slider_set_soft(g->illum_y, Lch[1]);
-    dt_bauhaus_slider_set(g->temperature, p->temperature);
+
+    // Redraw the temperature background color taking new soft bounds into account
+    dt_bauhaus_slider_set_soft(g->temperature, p->temperature);
+    paint_temperature_background(self);
   }
 
   if(!w || w == g->scale_red_R   || w == g->scale_red_G   || w == g->scale_red_B   || w == g->normalize_R)
@@ -3632,7 +3682,7 @@ void color_picker_apply(dt_iop_module_t *self, GtkWidget *picker, dt_dev_pixelpi
 
   check_if_close_to_daylight(p->x, p->y, &p->temperature, &p->illuminant, NULL);
 
-  dt_bauhaus_slider_set(g->temperature, p->temperature);
+  dt_bauhaus_slider_set_soft(g->temperature, p->temperature);
   dt_bauhaus_combobox_set(g->illuminant, p->illuminant);
   dt_bauhaus_combobox_set(g->adaptation, p->adaptation);
 
@@ -3645,6 +3695,7 @@ void color_picker_apply(dt_iop_module_t *self, GtkWidget *picker, dt_dev_pixelpi
   update_illuminants(self);
   update_approx_cct(self);
   update_illuminant_color(self);
+  paint_temperature_background(self);
 
   --darktable.gui->reset;
 
@@ -3724,21 +3775,10 @@ void gui_init(struct dt_iop_module_t *self)
   g->illum_led = dt_bauhaus_combobox_from_params(self, "illum_led");
 
   g->temperature = dt_bauhaus_slider_from_params(self, N_("temperature"));
+  dt_bauhaus_slider_set_soft_range(g->temperature, 3000., 7000.);
   dt_bauhaus_slider_set_step(g->temperature, 50.);
   dt_bauhaus_slider_set_digits(g->temperature, 0);
   dt_bauhaus_slider_set_format(g->temperature, "%.0f K");
-
-  const float max_temp = dt_bauhaus_slider_get_hard_max(g->temperature);
-  const float min_temp = dt_bauhaus_slider_get_hard_min(g->temperature);
-
-  for(int i = 0; i < DT_BAUHAUS_SLIDER_MAX_STOPS; i++)
-  {
-    const float stop = ((float)i / (float)(DT_BAUHAUS_SLIDER_MAX_STOPS - 1));
-    const float t = min_temp + stop * (max_temp - min_temp);
-    dt_aligned_pixel_t RGB = { 0 };
-    illuminant_CCT_to_RGB(t, RGB);
-    dt_bauhaus_slider_set_stop(g->temperature, stop, RGB[0], RGB[1], RGB[2]);
-  }
 
   g->illum_x = dt_bauhaus_slider_new_with_range_and_feedback(self, 0., 360., 0.5, 0, 1, 0);
   dt_bauhaus_widget_set_label(g->illum_x, NULL, _("hue"));

@@ -5,6 +5,7 @@ include(CheckCXXCompilerFlag)
 include(CheckCSourceCompiles)
 include(CheckCXXSymbolExists)
 
+
 #
 # Add files for libdarktable
 #
@@ -382,6 +383,19 @@ if(USE_HEIF)
   endif()
 endif()
 
+#  For now we use the LibRaw submodule
+if (USE_LIBRAW)
+#    find_package(libraw 0.20.2)
+#    if (libraw_FOUND)
+#        list(APPEND LIBS ${libraw_LIBRARY})
+#        add_definitions(-DHAVE_LIBRAW=1)
+#        list(APPEND SOURCES "common/imageio_libraw.c")
+#        set(DT_SUPPORTED_EXTENSIONS ${DT_SUPPORTED_EXTENSIONS} libraw CACHE INTERNAL "")
+#    endif()
+   add_definitions(-DHAVE_LIBRAW=1)
+   list(APPEND SOURCES "common/imageio_libraw.c")
+endif()
+
 if(USE_LENSFUN)
   find_package(LensFun)
   if(LensFun_FOUND)
@@ -421,7 +435,9 @@ if (USE_ISOBMFF)
     # exiv2 >= 0.27.4 provides optional support for ISOBMFF files.
     # This must be manually enabled during exiv2 build and can be checked with
     # the EXV_ENABLE_BMFF symbol.
-    check_cxx_symbol_exists(EXV_ENABLE_BMFF "exiv2/exiv2.hpp" HAVE_EXV_ENABLE_BMFF)
+    check_symbol_exists(EXV_ENABLE_BMFF
+      "${Exiv2_INCLUDE_DIRS}/exiv2/exv_conf.h"
+      HAVE_EXV_ENABLE_BMFF)
     if(HAVE_EXV_ENABLE_BMFF)
       add_definitions(-DHAVE_LIBEXIV2_WITH_ISOBMFF=1)
       set(DT_SUPPORTED_EXTENSIONS ${DT_SUPPORTED_EXTENSIONS} cr3 CACHE INTERNAL "")
@@ -1023,3 +1039,13 @@ InstallDependencyFiles()
 
 # Tell CPack about the components and group the data components together (CPACK_COMPONENT_${COMPONENT_NAME_ALL_CAPS}_GROUP).
 set(CPACK_COMPONENTS_ALL DTApplication DTDebugSymbols DTDocuments)
+
+if (USE_LIBRAW)
+  set(LIBRAW_PATH "${CMAKE_CURRENT_SOURCE_DIR}/external/LibRaw" CACHE STRING "Relative path to libraw directory (default=CMAKE_CURRENT_SOURCE_DIR)")
+  set(ENABLE_EXAMPLES OFF CACHE BOOL "")
+  set(DT_SUPPORTED_EXTENSIONS ${DT_SUPPORTED_EXTENSIONS} libraw CACHE INTERNAL "")
+
+  # LibRaw sub-module
+  add_subdirectory(external/LibRaw-cmake)
+  target_link_libraries(lib_darktable PRIVATE libraw::libraw)
+endif()

@@ -55,7 +55,7 @@ typedef struct dt_iop_diffuse_params_t
   // global parameters
   int iterations;           // $MIN: 1   $MAX: 128   $DEFAULT: 1  $DESCRIPTION: "iterations"
   float sharpness;          // $MIN: -1.  $MAX: 1.   $DEFAULT: 0. $DESCRIPTION: "sharpness"
-  int radius;               // $MIN: 1   $MAX: 512   $DEFAULT: 8  $DESCRIPTION: "max radius"
+  int radius;               // $MIN: 1   $MAX: 512   $DEFAULT: 8  $DESCRIPTION: "radius span"
   float regularization;     // $MIN: 0. $MAX: 4.   $DEFAULT: 0. $DESCRIPTION: "edge sensitivity"
   float variance_threshold; // $MIN: -2. $MAX: 2.   $DEFAULT: 0. $DESCRIPTION: "edge threshold"
 
@@ -211,96 +211,99 @@ void init_presets(dt_iop_module_so_t *self)
   // deblurring presets
   p.sharpness = 0.0f;
   p.threshold = 0.0f;
-  p.variance_threshold = +0.2f;
+  p.variance_threshold = +1.f;
+  p.regularization = 3.f;
 
-  p.anisotropy_first = +3.f;
-  p.anisotropy_second = +6.f;
-  p.anisotropy_third = +3.f;
-  p.anisotropy_fourth = +6.f;
+  p.anisotropy_first = +1.f;
+  p.anisotropy_second = 0.f;
+  p.anisotropy_third = +1.f;
+  p.anisotropy_fourth = 0.f;
 
-  p.first = -0.2f;
-  p.second = +0.1f;
-  p.third = -0.05f;
-  p.fourth = +0.025f;
+  p.first = -0.25f;
+  p.second = +0.125f;
+  p.third = -0.50f;
+  p.fourth = +0.25f;
 
-  p.regularization = 1.5f;
-
-  p.iterations = 4;
   p.radius = 8;
+  p.iterations = 8;
   dt_gui_presets_add_generic(_("lens deblur: soft"), self->op, self->version(), &p, sizeof(p), 1,
                              DEVELOP_BLEND_CS_RGB_SCENE);
 
-  p.iterations = 6;
-  p.radius = 12;
+  p.radius = 10;
+  p.iterations = 16;
   dt_gui_presets_add_generic(_("lens deblur: medium"), self->op, self->version(), &p, sizeof(p), 1,
                              DEVELOP_BLEND_CS_RGB_SCENE);
 
-  p.iterations = 8;
-  p.radius = 16;
+  p.radius = 12;
+  p.iterations = 24;
   dt_gui_presets_add_generic(_("lens deblur: hard"), self->op, self->version(), &p, sizeof(p), 1,
                              DEVELOP_BLEND_CS_RGB_SCENE);
 
   p.iterations = 10;
   p.radius = 512;
   p.sharpness = 0.f;
-  p.variance_threshold = 0.0f;
-  p.regularization = 2.f;
+  p.variance_threshold = 0.25f;
+  p.regularization = 2.5f;
 
-  p.first = -0.30f;
-  p.second = +0.15f;
+  p.first = -0.20f;
+  p.second = +0.10f;
   p.third = -0.20f;
   p.fourth = +0.10f;
 
   p.anisotropy_first = 2.f;
-  p.anisotropy_second = 4.f;
+  p.anisotropy_second = 0.f;
   p.anisotropy_third = 2.f;
-  p.anisotropy_fourth = 4.f;
+  p.anisotropy_fourth = 0.f;
 
   dt_gui_presets_add_generic(_("dehaze"), self->op, self->version(), &p, sizeof(p), 1,
                              DEVELOP_BLEND_CS_RGB_SCENE);
 
-  p.iterations = 5;
-  p.radius = 5;
+  p.iterations = 32;
   p.sharpness = 0.f;
   p.threshold = 0.f;
   p.variance_threshold = -0.25f;
   p.regularization = 4.f;
 
-  p.anisotropy_first = -5.f;
-  p.anisotropy_second = +5.f;
-  p.anisotropy_third = -5.f;
-  p.anisotropy_fourth = +5.f;
-
-  p.first = -0.25f;
-  p.second = +0.50f;
-  p.third = -0.05f;
-  p.fourth = +0.10f;
-  dt_gui_presets_add_generic(_("denoise: soft"), self->op, self->version(), &p, sizeof(p), 1, DEVELOP_BLEND_CS_RGB_SCENE);
-
-  p.iterations = 100;
-  p.radius = 8;
-  p.sharpness = 0.f;
-  p.threshold = 0.f;
-  p.variance_threshold = -0.25f;
-  p.regularization = 1.f;
-
-  p.anisotropy_first = 0.f;
+  p.anisotropy_first = +2.f;
   p.anisotropy_second = 0.f;
-  p.anisotropy_third = 0.f;
-  p.anisotropy_fourth = +5.f;
+  p.anisotropy_third = +2.f;
+  p.anisotropy_fourth = 0.f;
 
-  p.first = -0.02f;
-  p.second = 0.0f;
-  p.third = 0.0f;
-  p.fourth = +0.05f;
-  dt_gui_presets_add_generic(_("denoise: hard (slow)"), self->op, self->version(), &p, sizeof(p), 1, DEVELOP_BLEND_CS_RGB_SCENE);
+  p.radius = 1;
+  p.radius_center = 2;
+
+  p.first = +0.06f;
+  p.second = 0.f;
+  p.third = +0.06f;
+  p.fourth = 0.f;
+  dt_gui_presets_add_generic(_("denoise: fine"), self->op, self->version(), &p, sizeof(p), 1, DEVELOP_BLEND_CS_RGB_SCENE);
+
+  p.radius = 3;
+  p.radius_center = 4;
+
+  p.first = +0.05f;
+  p.second = 0.f;
+  p.third = +0.05f;
+  p.fourth = 0.f;
+  dt_gui_presets_add_generic(_("denoise: medium"), self->op, self->version(), &p, sizeof(p), 1, DEVELOP_BLEND_CS_RGB_SCENE);
+
+  p.radius = 6;
+  p.radius_center = 8;
+
+  p.first = +0.04f;
+  p.second = 0.f;
+  p.third = +0.04f;
+  p.fourth = 0.f;
+  dt_gui_presets_add_generic(_("denoise: coarse"), self->op, self->version(), &p, sizeof(p), 1, DEVELOP_BLEND_CS_RGB_SCENE);
+
+  p.radius_center = 0;
 
   p.iterations = 2;
   p.radius = 32;
   p.sharpness = 0.0f;
   p.threshold = 0.0f;
   p.variance_threshold = 0.f;
-  p.regularization = 3.f;
+  p.regularization = 4.f;
 
   p.anisotropy_first = +4.f;
   p.anisotropy_second = +4.f;
@@ -362,7 +365,7 @@ void init_presets(dt_iop_module_so_t *self)
   p.regularization = 2.f;
 
   p.anisotropy_first = 0.f;
-  p.anisotropy_second = +4.f;
+  p.anisotropy_second = 0.f;
   p.anisotropy_third = +4.f;
   p.anisotropy_fourth = +4.f;
 
@@ -393,22 +396,22 @@ void init_presets(dt_iop_module_so_t *self)
   // local contrast
   p.sharpness = 0.0f;
   p.threshold = 0.0f;
-  p.variance_threshold = 0.f;
+  p.variance_threshold = 1.f;
 
-  p.anisotropy_first = 0.f;
+  p.anisotropy_first = -2.5f;
   p.anisotropy_second = 0.f;
   p.anisotropy_third = 0.f;
-  p.anisotropy_fourth = 0.f;
+  p.anisotropy_fourth = -2.5f;
 
-  p.first = -0.5f;
+  p.first = -0.50f;
   p.second = 0.f;
   p.third = 0.f;
-  p.fourth = -0.5f;
+  p.fourth = -0.50f;
 
-  p.iterations = 1;
-  p.radius = 512;
+  p.iterations = 10;
+  p.radius = 384;
   p.radius_center = 512;
-  p.regularization = 0.5f;
+  p.regularization = 1.f;
   dt_gui_presets_add_generic(_("add local contrast"), self->op, self->version(), &p, sizeof(p), 1,
                              DEVELOP_BLEND_CS_RGB_SCENE);
 
@@ -422,14 +425,58 @@ void init_presets(dt_iop_module_so_t *self)
 
   p.anisotropy_first = +0.f;
   p.anisotropy_second = +0.f;
-  p.anisotropy_third = +2.f;
+  p.anisotropy_third = +0.f;
   p.anisotropy_fourth = +2.f;
 
   p.first = +0.0f;
   p.second = +0.0f;
-  p.third = +0.02f;
-  p.fourth = +0.02f;
+  p.third = +0.0f;
+  p.fourth = +0.5f;
   dt_gui_presets_add_generic(_("inpaint highlights"), self->op, self->version(), &p, sizeof(p), 1, DEVELOP_BLEND_CS_RGB_SCENE);
+
+  // fast presets for slow hardware
+  p.radius_center = 0;
+  p.radius = 128;
+  p.sharpness = 0.0f;
+  p.threshold = 0.0f;
+  p.variance_threshold = 0.25f;
+  p.regularization = 0.25f;
+
+  p.anisotropy_first = 0.f;
+  p.anisotropy_second = 0.f;
+  p.anisotropy_third = 5.f;
+  p.anisotropy_fourth = 0.f;
+
+  p.first = 0.f;
+  p.second = 0.f;
+  p.third = -0.50f;
+  p.fourth = 0.f;
+
+  p.iterations = 1;
+  dt_gui_presets_add_generic(_("fast sharpness"), self->op, self->version(), &p, sizeof(p), 1,
+                             DEVELOP_BLEND_CS_RGB_SCENE);
+
+  p.radius_center = 512;
+  p.radius = 512;
+  p.sharpness = 0.0f;
+  p.threshold = 0.0f;
+  p.variance_threshold = 0.05f;
+  p.regularization = 0.01f;
+
+
+  p.anisotropy_first = 0.f;
+  p.anisotropy_second = 0.f;
+  p.anisotropy_third = 5.f;
+  p.anisotropy_fourth = 0.f;
+
+  p.first = 0.f;
+  p.second = 0.f;
+  p.third = -0.50f;
+  p.fourth = 0.f;
+
+  p.iterations = 1;
+  dt_gui_presets_add_generic(_("fast local contrast"), self->op, self->version(), &p, sizeof(p), 1,
+                             DEVELOP_BLEND_CS_RGB_SCENE);
 }
 
 // The B spline best approximate a Gaussian of standard deviation :
@@ -809,7 +856,7 @@ static inline void heat_PDE_diffusion(const float *const restrict high_freq, con
         // Prevents large scale halos when deblurring.
         for_each_channel(c, aligned(variance))
         {
-          variance[c] = variance_threshold + sqrtf(variance[c] * regularization_factor);
+          variance[c] = variance_threshold + variance[c] * regularization_factor;
         }
         // compute the update
         dt_aligned_pixel_t acc = { 0.f };
@@ -1447,20 +1494,14 @@ void gui_init(struct dt_iop_module_t *self)
   gtk_box_pack_start(GTK_BOX(self->widget), dt_ui_section_label_new(_("diffusion properties")), FALSE, FALSE, 0);
 
   g->iterations = dt_bauhaus_slider_from_params(self, "iterations");
+  dt_bauhaus_slider_enable_soft_boundaries(g->iterations, 0., 500);
   gtk_widget_set_tooltip_text(g->iterations,
                               _("more iterations make the effect stronger but the module slower.\n"
                                 "this is analogous to giving more time to the diffusion reaction.\n"
                                 "if you plan on sharpening or inpainting, more iterations help reconstruction."));
 
-  g->radius = dt_bauhaus_slider_from_params(self, "radius");
-  dt_bauhaus_slider_set_format(g->radius, "%.0f px");
-  gtk_widget_set_tooltip_text(
-      g->radius, _("maximal scale of the diffusion.\n"
-                   "high values diffuse farther, at the expense of computation time.\n"
-                   "low values diffuse closer.\n"
-                   "if you plan on denoising, the radius should be around the width of your lens blur."));
-
   g->radius_center = dt_bauhaus_slider_from_params(self, "radius_center");
+  dt_bauhaus_slider_enable_soft_boundaries(g->radius_center, 0., 1024.);
   dt_bauhaus_slider_set_format(g->radius_center, "%.0f px");
   gtk_widget_set_tooltip_text(
       g->radius_center, _("main scale of the diffusion.\n"
@@ -1468,6 +1509,15 @@ void gui_init(struct dt_iop_module_t *self)
                           "non-zero defines the size of the details to diffuse heavily.\n"
                           "for deblurring and denoising, set to zero.\n"
                           "increase to act on local contrast instead."));
+
+  g->radius = dt_bauhaus_slider_from_params(self, "radius");
+  dt_bauhaus_slider_enable_soft_boundaries(g->radius, 0., 2048.);
+  dt_bauhaus_slider_set_format(g->radius, "%.0f px");
+  gtk_widget_set_tooltip_text(
+      g->radius, _("width of the diffusion around the center radius.\n"
+                   "high values diffuse on a large band of radii.\n"
+                   "low values diffuse closer to the center radius.\n"
+                   "if you plan on deblurring, the radius should be around the width of your lens blur."));
 
   gtk_box_pack_start(GTK_BOX(self->widget), dt_ui_section_label_new(_("diffusion speed")), FALSE, FALSE, 0);
 

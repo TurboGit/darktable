@@ -57,11 +57,12 @@
 
 #define NORM_MIN 1.52587890625e-05f // norm can't be < to 2^(-16)
 #define INVERSE_SQRT_3 0.5773502691896258f
+#define SAFETY_MARGIN 0.01f
 
 #define DT_GUI_CURVE_EDITOR_INSET DT_PIXEL_APPLY_DPI(1)
 
 
-DT_MODULE_INTROSPECTION(4, dt_iop_filmicrgb_params_t)
+DT_MODULE_INTROSPECTION(5, dt_iop_filmicrgb_params_t)
 
 /**
  * DOCUMENTATION
@@ -134,6 +135,12 @@ typedef enum dt_iop_filmicrgb_colorscience_type_t
   DT_FILMIC_COLORSCIENCE_V3 = 2, // $DESCRIPTION: "v5 (2021)"
 } dt_iop_filmicrgb_colorscience_type_t;
 
+typedef enum dt_iop_filmicrgb_spline_version_type_t
+{
+  DT_FILMIC_SPLINE_VERSION_V1 = 0, // $DESCRIPTION: "v1 (2019)"
+  DT_FILMIC_SPLINE_VERSION_V2 = 1, // $DESCRIPTION: "v2 (2020)"
+  DT_FILMIC_SPLINE_VERSION_V3 = 2, // $DESCRIPTION: "v3 (2021)"
+} dt_iop_filmicrgb_spline_version_type_t;
 
 typedef enum dt_iop_filmicrgb_reconstruction_type_t
 {
@@ -185,8 +192,8 @@ typedef struct dt_iop_filmicrgb_params_t
   float black_point_target; // $MIN: 0.000 $MAX: 20.000 $DEFAULT: 0.01517634 $DESCRIPTION: "target black luminance"
   float white_point_target; // $MIN: 0 $MAX: 1600 $DEFAULT: 100 $DESCRIPTION: "target white luminance"
   float output_power;       // $MIN: 1 $MAX: 10 $DEFAULT: 4.0 $DESCRIPTION: "hardness"
-  float latitude;           // $MIN: 0.01 $MAX: 100 $DEFAULT: 33.0
-  float contrast;           // $MIN: 0 $MAX: 5 $DEFAULT: 1.35
+  float latitude;           // $MIN: 0.01 $MAX: 99 $DEFAULT: 50.0
+  float contrast;           // $MIN: 0 $MAX: 5 $DEFAULT: 1.1
   float saturation;         // $MIN: -50 $MAX: 200 $DEFAULT: 0 $DESCRIPTION: "extreme luminance saturation"
   float balance;            // $MIN: -50 $MAX: 50 $DEFAULT: 0.0 $DESCRIPTION: "shadows ↔ highlights balance"
   float noise_level;        // $MIN: 0.0 $MAX: 6.0 $DEFAULT: 0.2f $DESCRIPTION: "add noise in highlights"
@@ -199,7 +206,7 @@ typedef struct dt_iop_filmicrgb_params_t
   dt_iop_filmicrgb_curve_type_t shadows; // $DEFAULT: DT_FILMIC_CURVE_RATIONAL $DESCRIPTION: "contrast in shadows"
   dt_iop_filmicrgb_curve_type_t highlights; // $DEFAULT: DT_FILMIC_CURVE_RATIONAL $DESCRIPTION: "contrast in highlights"
   gboolean compensate_icc_black; // $DEFAULT: FALSE $DESCRIPTION: "compensate output ICC profile black point"
-  gint internal_version;         // $DEFAULT: 2020 $DESCRIPTION: "version of the spline generator"
+  dt_iop_filmicrgb_spline_version_type_t spline_version; // $DEFAULT: DT_FILMIC_SPLINE_VERSION_V3 $DESCRIPTION: "spline handling"
 } dt_iop_filmicrgb_params_t;
 // clang-format on
 
@@ -305,6 +312,7 @@ typedef struct dt_iop_filmicrgb_data_t
   float noise_level;
   int preserve_color;
   int version;
+  int spline_version;
   int high_quality_reconstruction;
   struct dt_iop_filmic_rgb_spline_t spline DT_ALIGNED_ARRAY;
   dt_noise_distribution_t noise_distribution;
@@ -364,10 +372,77 @@ int default_colorspace(dt_iop_module_t *self, dt_dev_pixelpipe_t *pipe, dt_dev_p
   return iop_cs_rgb;
 }
 
+inline static gboolean dt_iop_filmic_rgb_compute_spline(const dt_iop_filmicrgb_params_t *const p,
+                                                    struct dt_iop_filmic_rgb_spline_t *const spline);
+
+// convert parameters from spline v1 or v2 to spline v3
+static inline void convert_to_spline_v3(dt_iop_filmicrgb_params_t* n)
+{
+  if(n->spline_version == DT_FILMIC_SPLINE_VERSION_V3)
+    return;
+
+  dt_iop_filmic_rgb_spline_t spline;
+  dt_iop_filmic_rgb_compute_spline(n, &spline);
+  
+  // from the spline, compute new values for contrast, balance, and latitude to update spline_version to v3
+  float grey_log = spline.x[2];
+  float toe_log = fminf(spline.x[1], grey_log);
+  float shoulder_log = fmaxf(spline.x[3], grey_log);
+  float black_display = spline.y[0];
+  float grey_display = spline.y[2];
+  float white_display = spline.y[4];
+  const float scaled_safety_margin = SAFETY_MARGIN * (white_display - black_display);
+  float toe_display = fminf(spline.y[1], grey_display);
+  float shoulder_display = fmaxf(spline.y[3], grey_display);
+
+  float hardness = n->output_power;
+  float contrast = (shoulder_display - toe_display) / (shoulder_log - toe_log);
+  // sanitize toe and shoulder, for min and max values, while keeping the same contrast
+  float linear_intercept = grey_display - (contrast * grey_log);
+  if(toe_display < black_display + scaled_safety_margin)
+  {
+    toe_display = black_display + scaled_safety_margin;
+    // compute toe_log to keep same slope
+    toe_log = (toe_display - linear_intercept) / contrast;
+  }
+  if(shoulder_display > white_display - scaled_safety_margin)
+  {
+    shoulder_display = white_display - scaled_safety_margin;
+    // compute shoulder_log to keep same slope
+    shoulder_log = (shoulder_display - linear_intercept) / contrast;
+  }
+  // revert contrast adaptation that will be performed in dt_iop_filmic_rgb_compute_spline
+  contrast *= 8.0f / (n->white_point_source - n->black_point_source);
+  contrast *= hardness * powf(grey_display, hardness-1.0f);
+  // latitude is the % of the segment [b+safety*(w-b),w-safety*(w-b)] which is covered, where b is black_display and w white_display
+  const float latitude = CLAMP((shoulder_display - toe_display) / ((white_display - black_display) - 2.0f * scaled_safety_margin), 0.0f, 0.99f);
+  // find balance
+  float toe_display_ref = latitude * (black_display + scaled_safety_margin) + (1.0f - latitude) * grey_display;
+  float shoulder_display_ref = latitude * (white_display - scaled_safety_margin) + (1.0f - latitude) * grey_display;
+  float balance;
+  if(shoulder_display < shoulder_display_ref)
+    balance = 0.5f * (1.0f - fmaxf(shoulder_display - grey_display, 0.0f) / fmaxf(shoulder_display_ref - grey_display, 1E-5f));
+  else
+    balance = -0.5f * (1.0f - fmaxf(grey_display - toe_display, 0.0f) / fmaxf(grey_display - toe_display_ref, 1E-5f));
+
+  if(n->spline_version == DT_FILMIC_SPLINE_VERSION_V1)
+  {
+    // black and white point need to be updated as well,
+    // as code path for v3 will raise them to power 1.0f / hardness,
+    // while code path for v1 did not.
+    n->black_point_target = powf(black_display, hardness) * 100.0f;
+    n->white_point_target = powf(white_display, hardness) * 100.0f;
+  }
+  n->latitude = latitude * 100.0f;
+  n->contrast = contrast;
+  n->balance = balance * 100.0f;
+  n->spline_version = DT_FILMIC_SPLINE_VERSION_V3;
+}
+
 int legacy_params(dt_iop_module_t *self, const void *const old_params, const int old_version, void *new_params,
                   const int new_version)
 {
-  if(old_version == 1 && new_version == 4)
+  if(old_version == 1 && new_version == 5)
   {
     typedef struct dt_iop_filmicrgb_params_v1_t
     {
@@ -419,11 +494,12 @@ int legacy_params(dt_iop_module_t *self, const void *const old_params, const int
     n->high_quality_reconstruction = 0;
     n->noise_distribution = d->noise_distribution;
     n->noise_level = 0.f;
-    n->internal_version = 2019;
+    n->spline_version = DT_FILMIC_SPLINE_VERSION_V1;
     n->compensate_icc_black = FALSE;
+    convert_to_spline_v3(n);
     return 0;
   }
-  if(old_version == 2 && new_version == 4)
+  if(old_version == 2 && new_version == 5)
   {
     typedef struct dt_iop_filmicrgb_params_v2_t
     {
@@ -486,11 +562,12 @@ int legacy_params(dt_iop_module_t *self, const void *const old_params, const int
     n->noise_level = d->noise_level;
     n->noise_distribution = d->noise_distribution;
     n->noise_level = 0.f;
-    n->internal_version = 2019;
+    n->spline_version = DT_FILMIC_SPLINE_VERSION_V1;
     n->compensate_icc_black = FALSE;
+    convert_to_spline_v3(n);
     return 0;
   }
-  if(old_version == 3 && new_version == 4)
+  if(old_version == 3 && new_version == 5)
   {
     typedef struct dt_iop_filmicrgb_params_v3_t
     {
@@ -562,13 +639,68 @@ int legacy_params(dt_iop_module_t *self, const void *const old_params, const int
     n->noise_level = d->noise_level;
     n->noise_distribution = d->noise_distribution;
     n->noise_level = d->noise_level;
-    n->internal_version = 2019;
+    n->spline_version = DT_FILMIC_SPLINE_VERSION_V1;
     n->compensate_icc_black = FALSE;
+    convert_to_spline_v3(n);
+    return 0;
+  }
+  if(old_version == 4 && new_version == 5)
+  {
+    typedef struct dt_iop_filmicrgb_params_v4_t
+    {
+      float grey_point_source;     // $MIN: 0 $MAX: 100 $DEFAULT: 18.45 $DESCRIPTION: "middle gray luminance"
+      float black_point_source;    // $MIN: -16 $MAX: -0.1 $DEFAULT: -8.0 $DESCRIPTION: "black relative exposure"
+      float white_point_source;    // $MIN: 0 $MAX: 16 $DEFAULT: 4.0 $DESCRIPTION: "white relative exposure"
+      float reconstruct_threshold; // $MIN: -6.0 $MAX: 6.0 $DEFAULT: +3.0 $DESCRIPTION: "threshold"
+      float reconstruct_feather;   // $MIN: 0.25 $MAX: 6.0 $DEFAULT: 3.0 $DESCRIPTION: "transition"
+      float reconstruct_bloom_vs_details; // $MIN: -100.0 $MAX: 100.0 $DEFAULT: 100.0 $DESCRIPTION: "bloom ↔ reconstruct"
+      float reconstruct_grey_vs_color; // $MIN: -100.0 $MAX: 100.0 $DEFAULT: 100.0 $DESCRIPTION: "gray ↔ colorful details"
+      float reconstruct_structure_vs_texture; // $MIN: -100.0 $MAX: 100.0 $DEFAULT: 0.0 $DESCRIPTION: "structure ↔ texture"
+      float security_factor;                  // $MIN: -50 $MAX: 200 $DEFAULT: 0 $DESCRIPTION: "dynamic range scaling"
+      float grey_point_target;                // $MIN: 1 $MAX: 50 $DEFAULT: 18.45 $DESCRIPTION: "target middle gray"
+      float black_point_target; // $MIN: 0.000 $MAX: 20.000 $DEFAULT: 0.01517634 $DESCRIPTION: "target black luminance"
+      float white_point_target; // $MIN: 0 $MAX: 1600 $DEFAULT: 100 $DESCRIPTION: "target white luminance"
+      float output_power;       // $MIN: 1 $MAX: 10 $DEFAULT: 4.0 $DESCRIPTION: "hardness"
+      float latitude;           // $MIN: 0.01 $MAX: 99 $DEFAULT: 50.0
+      float contrast;           // $MIN: 0 $MAX: 5 $DEFAULT: 1.1
+      float saturation;         // $MIN: -50 $MAX: 200 $DEFAULT: 0 $DESCRIPTION: "extreme luminance saturation"
+      float balance;            // $MIN: -50 $MAX: 50 $DEFAULT: 0.0 $DESCRIPTION: "shadows ↔ highlights balance"
+      float noise_level;        // $MIN: 0.0 $MAX: 6.0 $DEFAULT: 0.2f $DESCRIPTION: "add noise in highlights"
+      dt_iop_filmicrgb_methods_type_t preserve_color; // $DEFAULT: DT_FILMIC_METHOD_POWER_NORM $DESCRIPTION: "preserve chrominance"
+      dt_iop_filmicrgb_colorscience_type_t version; // $DEFAULT: DT_FILMIC_COLORSCIENCE_V3 $DESCRIPTION: "color science"
+      gboolean auto_hardness;                       // $DEFAULT: TRUE $DESCRIPTION: "auto adjust hardness"
+      gboolean custom_grey;                         // $DEFAULT: FALSE $DESCRIPTION: "use custom middle-gray values"
+      int high_quality_reconstruction;       // $MIN: 0 $MAX: 10 $DEFAULT: 1 $DESCRIPTION: "iterations of high-quality reconstruction"
+      dt_iop_filmic_noise_distribution_t noise_distribution; // $DEFAULT: DT_NOISE_GAUSSIAN $DESCRIPTION: "type of noise"
+      dt_iop_filmicrgb_curve_type_t shadows; // $DEFAULT: DT_FILMIC_CURVE_RATIONAL $DESCRIPTION: "contrast in shadows"
+      dt_iop_filmicrgb_curve_type_t highlights; // $DEFAULT: DT_FILMIC_CURVE_RATIONAL $DESCRIPTION: "contrast in highlights"
+      gboolean compensate_icc_black; // $DEFAULT: FALSE $DESCRIPTION: "compensate output ICC profile black point"
+      gint internal_version; // $DEFAULT: 2020 $DESCRIPTION: "version of the spline generator"
+    } dt_iop_filmicrgb_params_v4_t;
+    
+    dt_iop_filmicrgb_params_v4_t *o = (dt_iop_filmicrgb_params_v4_t *)old_params;
+    dt_iop_filmicrgb_params_t *n = (dt_iop_filmicrgb_params_t *)new_params;
+    *n = *(dt_iop_filmicrgb_params_t*)o; // structure didn't change except the enum instead of gint for internal_version
+    // we still need to convert the internal_version (in year) to the enum
+    switch(o->internal_version)
+    {
+      case(2019):
+        n->spline_version = DT_FILMIC_SPLINE_VERSION_V1;
+        break;
+      case(2020):
+        n->spline_version = DT_FILMIC_SPLINE_VERSION_V2;
+        break;
+      case(2021):
+        n->spline_version = DT_FILMIC_SPLINE_VERSION_V3;
+        break;
+      default:
+        return 1;
+    }
+    convert_to_spline_v3(n);
     return 0;
   }
   return 1;
 }
-
 
 #ifdef _OPENMP
 #pragma omp declare simd aligned(pixel:16)
@@ -2098,11 +2230,13 @@ static void show_mask_callback(GtkWidget *slider, gpointer user_data)
 #define ORDER_4 5
 #define ORDER_3 4
 
-
-inline static void dt_iop_filmic_rgb_compute_spline(const dt_iop_filmicrgb_params_t *const p,
+// returns true if contrast was clamped, false otherwise
+// used in GUI, to show user when contrast clamping is happening
+inline static gboolean dt_iop_filmic_rgb_compute_spline(const dt_iop_filmicrgb_params_t *const p,
                                                     struct dt_iop_filmic_rgb_spline_t *const spline)
 {
   float grey_display = 0.4638f;
+  gboolean clamping = FALSE;
 
   if(p->custom_grey)
   {
@@ -2128,7 +2262,7 @@ inline static void dt_iop_filmic_rgb_compute_spline(const dt_iop_filmicrgb_param
   // target luminance desired after filmic curve
   float black_display, white_display;
 
-  if(p->internal_version == 2019)
+  if(p->spline_version == DT_FILMIC_SPLINE_VERSION_V1)
   {
     // this is a buggy version that doesn't take the output power function into account
     // it was silent because black and white display were set to 0 and 1 and users were advised to not touch them.
@@ -2137,7 +2271,7 @@ inline static void dt_iop_filmic_rgb_compute_spline(const dt_iop_filmicrgb_param
     black_display = CLAMP(p->black_point_target, 0.0f, p->grey_point_target) / 100.0f; // in %
     white_display = fmaxf(p->white_point_target, p->grey_point_target) / 100.0f;       // in %
   }
-  else //(p->internal_version == 2020)
+  else //(p->spline_version >= DT_FILMIC_SPLINE_VERSION_V2)
   {
     // this is the fixed version
     black_display = powf(CLAMP(p->black_point_target, 0.0f, p->grey_point_target) / 100.0f,
@@ -2146,32 +2280,88 @@ inline static void dt_iop_filmic_rgb_compute_spline(const dt_iop_filmicrgb_param
         = powf(fmaxf(p->white_point_target, p->grey_point_target) / 100.0f, 1.0f / (p->output_power)); // in %
   }
 
-  float latitude = CLAMP(p->latitude, 0.0f, 100.0f) / 100.0f * dynamic_range; // in % of dynamic range
-  float balance = CLAMP(p->balance, -50.0f, 50.0f) / 100.0f;                  // in %
-  float contrast = CLAMP(p->contrast, 1.00001f, 6.0f);
+  float toe_log, shoulder_log, toe_display, shoulder_display, contrast;
+  float balance = CLAMP(p->balance, -50.0f, 50.0f) / 100.0f; // in %
+  if(p->spline_version < DT_FILMIC_SPLINE_VERSION_V3)
+  {
+    float latitude = CLAMP(p->latitude, 0.0f, 100.0f) / 100.0f * dynamic_range; // in % of dynamic range
+    contrast = CLAMP(p->contrast, 1.00001f, 6.0f);
 
-  // nodes for mapping from log encoding to desired target luminance
-  // X coordinates
-  float toe_log = grey_log - latitude / dynamic_range * fabsf(black_source / dynamic_range);
-  float shoulder_log = grey_log + latitude / dynamic_range * fabsf(white_source / dynamic_range);
+    // nodes for mapping from log encoding to desired target luminance
+    // X coordinates
+    toe_log = grey_log - latitude / dynamic_range * fabsf(black_source / dynamic_range);
+    shoulder_log = grey_log + latitude / dynamic_range * fabsf(white_source / dynamic_range);
 
-  // interception
-  float linear_intercept = grey_display - (contrast * grey_log);
+    // interception
+    float linear_intercept = grey_display - (contrast * grey_log);
 
-  // y coordinates
-  float toe_display = (toe_log * contrast + linear_intercept);
-  float shoulder_display = (shoulder_log * contrast + linear_intercept);
+    // y coordinates
+    toe_display = (toe_log * contrast + linear_intercept);
+    shoulder_display = (shoulder_log * contrast + linear_intercept);
 
-  // Apply the highlights/shadows balance as a shift along the contrast slope
-  const float norm = sqrtf(contrast * contrast + 1.0f);
+    // Apply the highlights/shadows balance as a shift along the contrast slope
+    const float norm = sqrtf(contrast * contrast + 1.0f);
 
-  // negative values drag to the left and compress the shadows, on the UI negative is the inverse
-  const float coeff = -((2.0f * latitude) / dynamic_range) * balance;
+    // negative values drag to the left and compress the shadows, on the UI negative is the inverse
+    const float coeff = -((2.0f * latitude) / dynamic_range) * balance;
 
-  toe_display += coeff * contrast / norm;
-  shoulder_display += coeff * contrast / norm;
-  toe_log += coeff / norm;
-  shoulder_log += coeff / norm;
+    toe_display += coeff * contrast / norm;
+    shoulder_display += coeff * contrast / norm;
+    toe_log += coeff / norm;
+    shoulder_log += coeff / norm;
+  }
+  else // p->spline_version >= DT_FILMIC_SPLINE_VERSION_V3. Slope dependent on contrast only, and latitude as % of display range.
+  {
+    const float hardness = p->output_power;
+    // latitude in %
+    float latitude = CLAMP(p->latitude, 0.0f, 100.0f) / 100.0f;
+    float slope = p->contrast * dynamic_range / 8.0f;
+    float min_contrast = 1.0f; // otherwise, white_display and black_display cannot be reached
+    // make sure there is enough contrast to be able to construct the top right part of the curve
+    min_contrast = fmaxf(min_contrast, (white_display - grey_display) / (white_log - grey_log));
+    // make sure there is enough contrast to be able to construct the bottom left part of the curve
+    min_contrast = fmaxf(min_contrast, (grey_display - black_display) / (grey_log - black_log));
+    min_contrast += SAFETY_MARGIN;
+    // we want a slope that depends only on contrast at gray point.
+    // let's consider f(x) = (contrast*x+linear_intercept)^hardness
+    // f'(x) = contrast * hardness * (contrast*x+linear_intercept)^(hardness-1)
+    // linear_intercept = grey_display - (contrast * grey_log);
+    // f'(grey_log) = contrast * hardness * (contrast * grey_log + grey_display - (contrast * grey_log))^(hardness-1)
+    //              = contrast * hardness * grey_display^(hardness-1)
+    // f'(grey_log) = target_contrast <=> contrast = target_contrast / (hardness * grey_display^(hardness-1))
+    contrast = slope / (hardness * powf(grey_display, hardness - 1.0f));
+    float clamped_contrast = CLAMP(contrast, min_contrast, 100.0f);
+    clamping = (clamped_contrast != contrast);
+    contrast = clamped_contrast;
+
+    // interception
+    float linear_intercept = grey_display - (contrast * grey_log);
+
+    // consider the line of equation y = contrast * x + linear_intercept
+    // we want to keep y in [black_display, white_display] (with some safety margin)
+    // thus, we compute x values such as y=black_display and y=white_display
+    // latitude will influence position of toe and shoulder in the [xmin, xmax] segment
+    const float xmin = (black_display + SAFETY_MARGIN * (white_display - black_display) - linear_intercept) / contrast;
+    const float xmax = (white_display - SAFETY_MARGIN * (white_display - black_display) - linear_intercept) / contrast;
+
+    // nodes for mapping from log encoding to desired target luminance
+    // X coordinates
+    toe_log = (1.0f - latitude) * grey_log + latitude * xmin;
+    shoulder_log = (1.0f - latitude) * grey_log + latitude * xmax;
+
+    // Apply the highlights/shadows balance as a shift along the contrast slope
+    // negative values drag to the left and compress the shadows, on the UI negative is the inverse
+    float balance_correction = (balance > 0.0f) ? 2.0f * balance * (shoulder_log - grey_log)
+                                                : 2.0f * balance * (grey_log - toe_log);
+    toe_log -= balance_correction;
+    shoulder_log -= balance_correction;
+    toe_log = fmaxf(toe_log, xmin);
+    shoulder_log = fminf(shoulder_log, xmax);
+
+    // y coordinates
+    toe_display = (toe_log * contrast + linear_intercept);
+    shoulder_display = (shoulder_log * contrast + linear_intercept);
+  }
 
   /**
    * Now we have 3 segments :
@@ -2338,6 +2528,7 @@ inline static void dt_iop_filmic_rgb_compute_spline(const dt_iop_filmicrgb_param
     spline->M3[1] = c;
     spline->M4[1] = shoulder_display;
   }
+  return clamping;
 }
 
 void commit_params(dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pixelpipe_t *pipe,
@@ -2371,9 +2562,10 @@ void commit_params(dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pixelpipe_
 
 
   float contrast = p->contrast;
-  if(contrast < grey_display / grey_log)
+  if((p->spline_version < DT_FILMIC_SPLINE_VERSION_V3) && (contrast < grey_display / grey_log))
   {
     // We need grey_display - (contrast * grey_log) <= 0.0
+    // this clamping is handled automatically for spline_version >= DT_FILMIC_SPLINE_VERSION_V3
     contrast = 1.0001f * grey_display / grey_log;
   }
 
@@ -2384,6 +2576,7 @@ void commit_params(dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pixelpipe_
   d->output_power = p->output_power;
   d->contrast = contrast;
   d->version = p->version;
+  d->spline_version = p->spline_version;
   d->preserve_color = p->preserve_color;
   d->high_quality_reconstruction = p->high_quality_reconstruction;
   d->noise_level = p->noise_level;
@@ -2631,7 +2824,7 @@ static gboolean dt_iop_tonecurve_draw(GtkWidget *widget, cairo_t *crf, gpointer 
   dt_iop_module_t *self = (dt_iop_module_t *)user_data;
   dt_iop_filmicrgb_params_t *p = (dt_iop_filmicrgb_params_t *)self->params;
   dt_iop_filmicrgb_gui_data_t *g = (dt_iop_filmicrgb_gui_data_t *)self->gui_data;
-  dt_iop_filmic_rgb_compute_spline(p, &g->spline);
+  gboolean contrast_clamped = dt_iop_filmic_rgb_compute_spline(p, &g->spline);
 
   // Cache the graph objects to avoid recomputing all the view at each redraw
   gtk_widget_get_allocation(widget, &g->allocation);
@@ -2877,12 +3070,19 @@ static gboolean dt_iop_tonecurve_draw(GtkWidget *widget, cairo_t *crf, gpointer 
       float y = filmic_spline(value, g->spline.M1, g->spline.M2, g->spline.M3, g->spline.M4, g->spline.M5,
                               g->spline.latitude_min, g->spline.latitude_max, g->spline.type);
 
-      if(y > g->spline.y[4])
+      // curve is drawn in orange when above maximum
+      // or below minimum.
+      // we use a small margin in the comparison
+      // to avoid drawing curve in orange when it
+      // is right above or right below the limit
+      // due to floating point errors
+      const float margin = 1E-5;
+      if(y > g->spline.y[4] + margin)
       {
         y = fminf(y, 1.0f);
         cairo_set_source_rgb(cr, 0.75, .5, 0.);
       }
-      else if(y < g->spline.y[0])
+      else if(y < g->spline.y[0] - margin)
       {
         y = fmaxf(y, 0.f);
         cairo_set_source_rgb(cr, 0.75, .5, 0.);
@@ -2938,6 +3138,8 @@ static gboolean dt_iop_tonecurve_draw(GtkWidget *widget, cairo_t *crf, gpointer 
     float x_white = 1.f;
     float y_white = 1.f;
 
+    const float central_slope = (g->spline.y[3] - g->spline.y[1]) * g->graph_width / ((g->spline.x[3] - g->spline.x[1]) * g->graph_height);
+    const float central_slope_angle = atanf(central_slope) + M_PI / 2.0f;
     set_color(cr, darktable.bauhaus->graph_fg);
     for(int k = 0; k < 5; k++)
     {
@@ -2945,6 +3147,29 @@ static gboolean dt_iop_tonecurve_draw(GtkWidget *widget, cairo_t *crf, gpointer 
       {
         float x = g->spline.x[k];
         float y = g->spline.y[k];
+        const float ymin = g->spline.y[0];
+        const float ymax = g->spline.y[4];
+        // we multiply SAFETY_MARGIN by 1.1f to avoid possible false negatives due to float errors
+        const float y_margin = SAFETY_MARGIN * 1.1f * (ymax - ymin);
+        gboolean red = (((k == 1) && (y - ymin <= y_margin)) 
+                     || ((k == 3) && (ymax - y <= y_margin)));
+        float start_angle = 0.0f;
+        float end_angle = 2.f * M_PI;
+        // if contrast is clamped, show it on GUI with half circles
+        // for points 1 and 3
+        if(contrast_clamped)
+        {
+          if(k == 1)
+          {
+            start_angle = central_slope_angle + M_PI;
+            end_angle = central_slope_angle;
+          }
+          if(k == 3)
+          {
+            start_angle = central_slope_angle;
+            end_angle = start_angle + M_PI;
+          }
+        }
 
         if(g->gui_mode == DT_FILMIC_GUI_BASECURVE)
         {
@@ -2969,10 +3194,15 @@ static gboolean dt_iop_tonecurve_draw(GtkWidget *widget, cairo_t *crf, gpointer 
           y_white = y;
         }
 
+        if(red) cairo_set_source_rgb(cr, 0.8, 0.35, 0.35);
+
         // draw bullet
-        cairo_arc(cr, x * g->graph_width, (1.0 - y) * g->graph_height, DT_PIXEL_APPLY_DPI(4), 0, 2. * M_PI);
+        cairo_arc(cr, x * g->graph_width, (1.0 - y) * g->graph_height, DT_PIXEL_APPLY_DPI(4), start_angle, end_angle);
         cairo_fill(cr);
         cairo_stroke(cr);
+
+        // reset color for next points
+        if(red) set_color(cr, darktable.bauhaus->graph_fg);
       }
     }
     cairo_restore(cr);
@@ -3801,7 +4031,7 @@ void gui_init(dt_iop_module_t *self)
   self->widget = dt_ui_notebook_page(g->notebook, N_("look"), NULL);
 
   g->contrast = dt_bauhaus_slider_from_params(self, N_("contrast"));
-  dt_bauhaus_slider_set_soft_range(g->contrast, 1.0, 2.0);
+  dt_bauhaus_slider_set_soft_range(g->contrast, 0.5, 3.0);
   dt_bauhaus_slider_set_digits(g->contrast, 3);
   dt_bauhaus_slider_set_step(g->contrast, .01);
   gtk_widget_set_tooltip_text(g->contrast, _("slope of the linear part of the curve\n"
@@ -3814,11 +4044,10 @@ void gui_init(dt_iop_module_t *self)
                                                  "decrease to mute highlights."));
 
   g->latitude = dt_bauhaus_slider_from_params(self, N_("latitude"));
-  dt_bauhaus_slider_set_soft_range(g->latitude, 5.0, 50.0);
+  dt_bauhaus_slider_set_soft_range(g->latitude, 0.1, 90.0);
   dt_bauhaus_slider_set_format(g->latitude, "%.2f %%");
   gtk_widget_set_tooltip_text(g->latitude,
                               _("width of the linear domain in the middle of the curve,\n"
-                                "in percent of the dynamic range (white exposure - black exposure).\n"
                                 "increase to get more contrast and less desaturation at extreme luminances,\n"
                                 "decrease otherwise. no desaturation happens in the latitude range.\n"
                                 "this has no effect on mid-tones."));

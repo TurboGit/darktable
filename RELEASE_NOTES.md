@@ -37,9 +37,15 @@ You are strongly advised to take a backup first.
   Please note that any shortcuts you have previously created are not transferred
   to the new functionality and will need to be redefined in darktable 3.8.
 
-- New diffuse and sharpen module.
+- New diffuse and sharpen module, allowing to simulate or to revert diffusion
+  processes to reconstruct images from lens blur, hazing, sensor low-pass filter, or
+  noise. It can also be used to simulate watercolour smudges, increase local contrast, simulate blooming or apply surface blur. Special rules can be defined
+  to specifically diffuse across or along edges, as well as to avoid sharpening or
+  blurring them.
 
-- New scene-referred blurs module.
+- New scene-referred blurs module, to synthesize motion and lens blurs in a parametric
+  and physically-accurate way. It lets you define the motion path or the lens
+  diaphragm and then generates the corresponding blur.
 
 - Perspective correction module has been renamed to rotate and perspective
   and now allows you to manually define correction settings by drawing lines
@@ -55,6 +61,10 @@ You are strongly advised to take a backup first.
 
 - The composition guides from the crop module are now available globally and do
   not require the crop module to be activated.
+
+- The Canon raw CR3 format is now supported (see list of supported cameras in the
+  section below). This support is done by LibRaw and requires at least exiv2 version
+  0.27.4 with BMFF support activated.
 
 ## Other New Features And Changes
 
@@ -192,6 +202,15 @@ You are strongly advised to take a backup first.
 - Add a borderless requirement indicator in the print module when the user's
   selected margins are below the hardware margins.
 
+- Add an option to show all modules in the history into the active
+  module group regardeless of whether or not they are currently
+  enabled.
+
+- Add a search box in preset preferences and shortcuts.
+
+- Improved curve handling in filmic. Curve should be easier to control, as
+  some side-effects of some parameters on others have been eliminated.
+
 ## Bug Fixes
 
 - Multiple memory leaks have been fixed.
@@ -235,7 +254,7 @@ You are strongly advised to take a backup first.
 
 - Fix the image loader flag, which was not properly set at import time.
 
-- Add a search box in preset preferences and shortcuts.
+- Fix possible wrong setting in Color Calibration when switching from Jpeg to RAW files.
 
 ## Notes
 
@@ -253,12 +272,35 @@ You are strongly advised to take a backup first.
 
 ### Base Support
 
+- Canon EOS R
+- Canon EOS RP
+- Canon EOS R5
+- Canon EOS R6
+- Canon EOS 250D
+- Canon EOS 850D
+- Canon EOS 90D
+- Canon EOS 1D X Mark III
+- Canon EOS M6 Mark II
+- Canon EOS M50
+- Canon EOS M50 Mark II
+- Canon EOS M200
+- Canon PowerShot G5 X Mark II
+- Canon PowerShot G7 X Mark III
 
 ### White Balance Presets
 
+- Canon EOS R (with fine-tuning)
+- Canon EOS RP (with fine-tuning)
+- Canon EOS R5 (with fine-tuning)
+- Canon EOS R6
+- Canon EOS M50 (with fine-tuning)
 
 ### Noise Profiles
 
+- Canon EOS R
+- Canon EOS RP
+- Canon EOS R5
+- Canon EOS R6
 
 ### Custom Color matrices
 
