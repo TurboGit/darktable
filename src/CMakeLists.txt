@@ -11,6 +11,7 @@ include(CheckCXXSymbolExists)
 #
 FILE(GLOB SOURCE_FILES
   "bauhaus/bauhaus.c"
+  "common/act_on.c"
   "common/atomic.c"
   "common/bilateral.c"
   "common/bilateralcl.c"
@@ -277,10 +278,6 @@ if(USE_OPENMP)
   endif()
 
   list(APPEND LIBS ${OpenMP_C_LIBRARIES} ${OpenMP_CXX_LIBRARIES})
-
-  if(WIN32)
-    list(APPEND LIBS gomp)
-  endif(WIN32)
 endif(USE_OPENMP)
 
 if(USE_DARKTABLE_PROFILING)
@@ -929,6 +926,78 @@ if(USE_XMLLINT)
 endif(USE_XMLLINT)
 
 #
+# Genetate Gresource for splash screen
+#
+
+# Setup CMake to use glib-compile-resources
+find_program(GLIB_COMPILE_RESOURCES NAMES glib-compile-resources REQUIRED)
+
+#include_directories(${CMAKE_CURRENT_BINARY_DIR})
+list(APPEND LIBS "X11")
+
+set(SPLASH_RESOURCE_C splash-resource.c)
+set(SPLASH_RESOURCE_H splash-resource.h)
+set(SPLASH_RESOURCE_XML ${CMAKE_SOURCE_DIR}/data/splash-screen/splash-resource.xml)
+set(SPLASH_SVG ${CMAKE_SOURCE_DIR}/data/splash-screen/splash.svg)
+set(SPLASH_CSS ${CMAKE_SOURCE_DIR}/data/splash-screen/splash.css)
+set(DT_SPLASH dt_splash)
+
+# Setup CMake how to generate Gresource C file
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${SPLASH_RESOURCE_C}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMAND ${GLIB_COMPILE_RESOURCES}
+    ARGS
+        --target=${CMAKE_CURRENT_BINARY_DIR}/${SPLASH_RESOURCE_C}
+        --c-name=${DT_SPLASH}
+        --generate-source
+        ${SPLASH_RESOURCE_XML}
+    VERBATIM
+    DEPENDS
+        ${SPLASH_SVG}
+        ${SPLASH_CSS}
+    COMMENT "Generating ${SPLASH_RESOURCE_C}"     
+    )
+
+# Setup CMake how to generate Gresource H file
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${SPLASH_RESOURCE_H}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMAND ${GLIB_COMPILE_RESOURCES}
+    ARGS
+        --target=${CMAKE_CURRENT_BINARY_DIR}/${SPLASH_RESOURCE_H}
+        --c-name=${DT_SPLASH}
+        --generate-header
+        ${SPLASH_RESOURCE_XML}
+    VERBATIM
+    DEPENDS
+        ${SPLASH_SVG}
+        ${SPLASH_CSS}
+    COMMENT "Generating ${SPLASH_RESOURCE_H}"     
+    )       
+
+add_custom_target(
+    splash-resources ALL
+    DEPENDS
+        ${CMAKE_CURRENT_BINARY_DIR}/${SPLASH_RESOURCE_C}
+        ${CMAKE_CURRENT_BINARY_DIR}/${SPLASH_RESOURCE_H}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+
+file(GLOB SPLASH_FILES
+    "gui/splash.c"
+    "gui/splash.h"
+    ${SPLASH_RESOURCE_C}
+    ${SPLASH_RESOURCE_H}
+    )
+    
+set_source_files_properties(
+    ${CMAKE_CURRENT_BINARY_DIR}/${SPLASH_RESOURCE_C}
+    ${CMAKE_CURRENT_BINARY_DIR}/${SPLASH_RESOURCE_H}
+    PROPERTIES GENERATED TRUE
+    )
+
+set(SOURCES ${SOURCES} ${SPLASH_FILES})
 # build libdarktable
 #
 add_library(lib_darktable SHARED ${DARKTABLE_BINDIR}/preferences_gen.h ${DARKTABLE_BINDIR}/version_gen.c ${SOURCES})
@@ -940,6 +1009,7 @@ set_source_files_properties(${DARKTABLE_BINDIR}/version_gen.c PROPERTIES GENERAT
 add_dependencies(lib_darktable generate_conf)
 add_dependencies(lib_darktable generate_version)
 add_dependencies(lib_darktable generate_preferences)
+add_dependencies(lib_darktable splash-resources)
 
 if(APPLE)
   set_target_properties(lib_darktable PROPERTIES MACOSX_RPATH TRUE)
@@ -1015,8 +1085,9 @@ endif(BUILD_TESTING)
 
 #
 # build darktable executable
-#
+##
 add_executable(darktable ${SUBSYSTEM_MACOSX} ${SUBSYSTEM_WIN32} main.c ${RESOURCE_OBJECT})
+
 set_target_properties(darktable PROPERTIES LINKER_LANGUAGE C)
 if(APPLE)
   set_target_properties(lib_darktable PROPERTIES LINK_FLAGS "-framework Carbon -framework AppKit")
@@ -1042,7 +1113,9 @@ set(CPACK_COMPONENTS_ALL DTApplication DTDebugSymbols DTDocuments)
 
 if (USE_LIBRAW)
   set(LIBRAW_PATH "${CMAKE_CURRENT_SOURCE_DIR}/external/LibRaw" CACHE STRING "Relative path to libraw directory (default=CMAKE_CURRENT_SOURCE_DIR)")
-  set(ENABLE_EXAMPLES OFF CACHE BOOL "")
+  if(NOT USE_OPENMP)
+    set(ENABLE_OPENMP OFF CACHE BOOL "")
+  endif()
   set(DT_SUPPORTED_EXTENSIONS ${DT_SUPPORTED_EXTENSIONS} libraw CACHE INTERNAL "")
 
   # LibRaw sub-module

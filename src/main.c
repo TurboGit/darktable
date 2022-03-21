@@ -16,8 +16,10 @@
     along with darktable.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "common/darktable.h"
+#include "gui/splash.h"
 #include "gui/gtk.h"
 #include <stdlib.h>
+#include <X11/Xlib.h>
 
 #ifdef __APPLE__
 #include "osx/osx.h"
@@ -32,6 +34,7 @@ int main(int argc, char *argv[])
 #ifdef __APPLE__
   dt_osx_prepare_environment();
 #endif
+
 #ifdef _WIN32
   // on Windows we have a hard time showing stuff printed to stdout/stderr to the user.
   // because of that we write it to a log file.
@@ -88,6 +91,11 @@ int main(int argc, char *argv[])
   // make sure GTK client side decoration is disabled, otherwise windows resizing issues can be observed
   g_setenv("GTK_CSD", "0", TRUE);
 #endif
+
+  XInitThreads();
+//*JPV*/ printf("before main() gtk_init()\n");
+  gtk_init(&argc, &argv);
+  dt_splash_start();
 
   if(dt_init(argc, argv, TRUE, TRUE, NULL)) exit(1);
   dt_gui_gtk_run(darktable.gui);

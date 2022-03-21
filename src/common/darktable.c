@@ -67,6 +67,7 @@
 #include "gui/gtk.h"
 #include "gui/guides.h"
 #include "gui/presets.h"
+#include "gui/splash.h"
 #include "libs/lib.h"
 #include "lua/init.h"
 #include "views/view.h"
@@ -901,8 +902,8 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
     // priority to the XWayland backend for Wayland users.
     gdk_set_allowed_backends("x11,*");
 #endif
-    gtk_init(&argc, &argv);
-
+    // Gtk_init() placed in main, before dt_splash_start()
+    // gtk_init(&argc, &argv);
     darktable.themes = NULL;
 
     // execute a performance check and configuration if needed
@@ -1200,7 +1201,6 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
   }
 
   dt_print(DT_DEBUG_CONTROL, "[init] startup took %f seconds\n", dt_get_wtime() - start_wtime);
-
   return 0;
 }
 

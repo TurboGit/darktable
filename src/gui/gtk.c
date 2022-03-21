@@ -40,6 +40,7 @@
 #include "control/jobs.h"
 #include "control/signal.h"
 #include "gui/presets.h"
+#include "gui/splash.h"
 #include "views/view.h"
 
 #include <gdk/gdkkeysyms.h>
@@ -848,6 +849,12 @@ void dt_gui_store_last_preset(const char *name)
   darktable.gui->last_preset = g_strdup(name);
 }
 
+static gboolean _gui_noop_action_callback(GtkAccelGroup *accel_group, GObject *acceleratable,
+                                                    guint keyval, GdkModifierType modifier, gpointer p)
+{
+  return TRUE;
+}
+
 static gboolean _gui_switch_view_key_accel_callback(GtkAccelGroup *accel_group, GObject *acceleratable,
                                                     guint keyval, GdkModifierType modifier, gpointer p)
 {
@@ -1205,6 +1212,13 @@ int dt_gui_gtk_init(dt_gui_gtk_t *gui)
   dt_accel_register_global(NC_("accel", "switch views/slideshow"), GDK_KEY_s, 0);
   dt_accel_register_global(NC_("accel", "switch views/print"), GDK_KEY_p, 0);
 
+  //an action that does nothing - used for overriding/removing default shortcuts
+  dt_accel_register_global(NC_("accel", "no-op"), 0, 0);
+
+  dt_accel_connect_global("no-op",
+                          g_cclosure_new(G_CALLBACK(_gui_noop_action_callback),
+                                         NULL, NULL));
+
   dt_accel_connect_global("switch views/tethering",
                           g_cclosure_new(G_CALLBACK(_gui_switch_view_key_accel_callback),
                                          GINT_TO_POINTER(DT_GUI_VIEW_SWITCH_TO_TETHERING), NULL));
@@ -1368,8 +1382,10 @@ void dt_gui_gtk_run(dt_gui_gtk_t *gui)
 #ifdef GDK_WINDOWING_QUARTZ
   dt_osx_focus_window();
 #endif
-  /* start the event loop */
-  gtk_main();
+
+  dt_splash_quit();
+  // event loop started in dt_splash_start
+  // gtk_main();
 
   if (darktable.gui->surface)
   {
