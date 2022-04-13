@@ -142,6 +142,7 @@ FILE(GLOB SOURCE_FILES
   "gui/hist_dialog.c"
   "gui/preferences.c"
   "gui/presets.c"
+  "gui/splash.c"
   "gui/styles_dialog.c"
   "gui/color_picker_proxy.c"
   "gui/import_metadata.c"
@@ -1000,7 +1001,7 @@ set_source_files_properties(
 set(SOURCES ${SOURCES} ${SPLASH_FILES})
 # build libdarktable
 #
-add_library(lib_darktable SHARED ${DARKTABLE_BINDIR}/preferences_gen.h ${DARKTABLE_BINDIR}/version_gen.c ${SOURCES})
+add_library(lib_darktable SHARED ${DARKTABLE_BINDIR}/preferences_gen.h ${DARKTABLE_BINDIR}/version_gen.c ${DARKTABLE_BINDIR}/splash-resource.c ${SOURCES})
 
 # cmake implicitly sets GENERATED on the source file in the directory of the custom command
 # since this isn't the same directory we do have to manually set it
