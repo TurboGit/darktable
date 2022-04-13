@@ -16,10 +16,18 @@
     along with darktable.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// fork : void dt_splash_start(int argc, char *argv[]);
-void dt_splash_start();
-void dt_update_splash_label(char* msg);
-void dt_splash_quit();
+typedef struct dt_splash_t {
+  pthread_t thread_id;
+  gboolean close;
+  GResource *splash_resource;
+  GtkWidget *splash_win;
+  GtkWidget *splash_label;
+  char *msg;
+} dt_splash_t;
+
+dt_splash_t *dt_splash_start();
+void dt_splash_quit(dt_splash_t *data);
+void dt_update_splash_label(dt_splash_t *data);
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
 // vim: shiftwidth=2 expandtab tabstop=2 cindent

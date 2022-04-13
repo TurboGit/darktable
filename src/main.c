@@ -19,7 +19,7 @@
 #include "gui/splash.h"
 #include "gui/gtk.h"
 #include <stdlib.h>
-#include <X11/Xlib.h>
+//#include <X11/Xlib.h>
 
 #ifdef __APPLE__
 #include "osx/osx.h"
@@ -92,13 +92,16 @@ int main(int argc, char *argv[])
   g_setenv("GTK_CSD", "0", TRUE);
 #endif
 
-  XInitThreads();
-//*JPV*/ printf("before main() gtk_init()\n");
-  gtk_init(&argc, &argv);
-  dt_splash_start();
+//  XInitThreads();
+//*JPV*/ printf("main() before gtk_init()\n");
+//  gtk_init(&argc, &argv);
+//  dt_splash_start();
+//*JPV*/ printf("main() after dt_splash_start()\n");
 
   if(dt_init(argc, argv, TRUE, TRUE, NULL)) exit(1);
+/*JPV*/ printf("main() after dt_init()\n");
   dt_gui_gtk_run(darktable.gui);
+/*JPV*/ printf("main() after dt_gui_gtk_run()\n");
 
 #ifdef _WIN32
   if(redirect_output)

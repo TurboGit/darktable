@@ -40,7 +40,6 @@
 #include "control/jobs.h"
 #include "control/signal.h"
 #include "gui/presets.h"
-#include "gui/splash.h"
 #include "views/view.h"
 
 #include <gdk/gdkkeysyms.h>
@@ -1383,9 +1382,7 @@ void dt_gui_gtk_run(dt_gui_gtk_t *gui)
   dt_osx_focus_window();
 #endif
 
-  dt_splash_quit();
-  // event loop started in dt_splash_start
-  // gtk_main();
+  gtk_main();
 
   if (darktable.gui->surface)
   {

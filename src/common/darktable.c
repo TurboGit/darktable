@@ -85,6 +85,7 @@
 #include <unistd.h>
 #include <locale.h>
 #include <limits.h>
+#include <X11/Xlib.h>
 
 #if defined(__SSE__)
 #include <xmmintrin.h>
@@ -344,6 +345,7 @@ static void dt_codepaths_init()
 int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load_data, lua_State *L)
 {
   double start_wtime = dt_get_wtime();
+  dt_splash_t *splash = NULL;
 
 #ifndef _WIN32
   if(getuid() == 0 || geteuid() == 0)
@@ -902,8 +904,10 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
     // priority to the XWayland backend for Wayland users.
     gdk_set_allowed_backends("x11,*");
 #endif
-    // Gtk_init() placed in main, before dt_splash_start()
-    // gtk_init(&argc, &argv);
+   // XInitThreads();
+   gtk_init(&argc, &argv);
+   splash = dt_splash_start();
+/*JPV*/ printf("dt_init() after dt_splash_start()\n");
     darktable.themes = NULL;
 
     // execute a performance check and configuration if needed
@@ -934,7 +938,9 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
   // get the list of color profiles
   darktable.color_profiles = dt_colorspaces_init();
 
-  // initialize the database
+/*JPV*/ printf("dt_init() before init database\n");
+
+// initialize the database
   darktable.db = dt_database_init(dbfilename_from_command, load_data, init_gui);
   if(darktable.db == NULL)
   {
@@ -973,6 +979,8 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
     fprintf(stderr, "ERROR: can't acquire database lock, aborting.\n");
     return 1;
   }
+
+/*JPV*/ printf("dt_init() after init database\n");
 
   //db maintenance on startup (if configured to do so)
   if(dt_database_maybe_maintenance(darktable.db, init_gui, FALSE))
@@ -1063,6 +1071,7 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
   // functions of the views depend on darktable.control->accels_* to register
   // their keyboard accelerators
 
+/*JPV*/ printf("dt_init() before dt_gui_gtk_init()\n");
   if(init_gui)
   {
     if(dt_gui_gtk_init(darktable.gui))
@@ -1074,6 +1083,7 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
   }
   else
     darktable.gui = NULL;
+/*JPV*/ printf("dt_init() after dt_gui_gtk_init()\n");
 
   darktable.view_manager = (dt_view_manager_t *)calloc(1, sizeof(dt_view_manager_t));
   dt_view_manager_init(darktable.view_manager);
@@ -1085,8 +1095,10 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
     return 1;
   }
 
+/*JPV*/ printf("dt_init() before dt_imageio_init()\n");
   darktable.imageio = (dt_imageio_t *)calloc(1, sizeof(dt_imageio_t));
   dt_imageio_init(darktable.imageio);
+/*JPV*/ printf("dt_init() after dt_imageio_init()\n");
 
   // load default iop order
   darktable.iop_order_list = dt_ioppr_get_iop_order_list(0, FALSE);
@@ -1201,6 +1213,9 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
   }
 
   dt_print(DT_DEBUG_CONTROL, "[init] startup took %f seconds\n", dt_get_wtime() - start_wtime);
+
+/*JPV*/ printf("dt_init() before dt_splash_quit()\n");
+  dt_splash_quit(splash);
   return 0;
 }
 
