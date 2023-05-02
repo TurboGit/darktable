@@ -907,6 +907,11 @@ static inline void dt_XYZ_2_JzAzBz(const dt_aligned_pixel_t XYZ_D65, dt_aligned_
       { 0.57999900f,  1.1206490f,  0.2648000f, 0.0f },
       { 0.01464800f,  0.0531008f,  0.6684799f, 0.0f },
   };
+  static const dt_colormatrix_t M = {
+      { 0.41478972f, 0.579999f, 0.0146480f, 0.0f },
+      { -0.2015100f, 1.120649f, 0.0531008f, 0.0f },
+      { -0.0166008f, 0.264800f, 0.6684799f, 0.0f },
+  };
   static const dt_colormatrix_t A_transposed = {
       { 0.5f,       3.524000f,  0.199076f, 0.0f },
       { 0.5f,      -4.066708f,  1.096799f, 0.0f },
@@ -925,13 +930,19 @@ static inline void dt_XYZ_2_JzAzBz(const dt_aligned_pixel_t XYZ_D65, dt_aligned_
   dt_apply_transposed_color_matrix(XYZ, M_transposed, LMS);
   dt_vector_mul1(LMS, LMS, 1.0f/10000.0f);
   dt_vector_clipneg(LMS);
-  dt_vector_pow1(LMS, n, LMS);
-  for_each_channel(i, aligned(LMS))
-    LMS[i] = (c1 + c2 * LMS[i]) / (1.0f + c3 * LMS[i]);
-  dt_vector_pow1(LMS, p, LMS);
+
+#ifdef _OPENMP
+#pragma omp simd aligned(LMS, XYZ:16) aligned(M:64)
+#endif
+  for(int i = 0; i < 3; i++)
+  {
+    LMS[i] = powf(LMS[i], n);
+    LMS[i] = powf((c1 + c2 * LMS[i]) / (1.0f + c3 * LMS[i]), p);
+  }
 
   // L'M'S' -> Izazbz
   dt_apply_transposed_color_matrix(LMS, A_transposed, JzAzBz);
+
   // Iz -> Jz
   JzAzBz[0] = fmaxf(((1.0f + d) * JzAzBz[0]) / (1.0f + d * JzAzBz[0]) - d0, 0.f);
 }
@@ -992,12 +1003,15 @@ static inline void dt_JzAzBz_2_XYZ(const dt_aligned_pixel_t JzAzBz, dt_aligned_p
   dt_aligned_pixel_t LMS;
   dt_apply_transposed_color_matrix(IzAzBz,AI_trans, LMS);
   dt_vector_clipneg(LMS);
-  dt_vector_pow1(LMS, p_inv, LMS);
-  for_each_channel(i, aligned(LMS))
-    LMS[i] = (c1 - LMS[i]) / (c3 * LMS[i] - c2);
-  dt_vector_clipneg(LMS);
-  dt_vector_pow1(LMS, n_inv, LMS);
-  dt_vector_mul1(LMS, LMS, 10000.0f);
+
+#ifdef _OPENMP
+#pragma omp simd aligned(LMS)
+#endif
+  for(int i = 0; i < 3; i++)
+  {
+    LMS[i] = powf(LMS[i], p_inv);
+    LMS[i] = 10000.f * powf(fmaxf((c1 - LMS[i]) / (c3 * LMS[i] - c2), 0.0f), n_inv);
+  }
 
   // LMS -> X'Y'Z
   dt_aligned_pixel_t XYZ;
