@@ -1651,7 +1651,7 @@ static gboolean _dev_auto_apply_presets(dt_develop_t *dev)
   //  set filters
 
   int iformat = 0;
-  if(dt_image_is_raw(image))
+  if(dt_image_is_rawprepare_supported(image))
     iformat |= FOR_RAW;
   else
     iformat |= FOR_LDR;
