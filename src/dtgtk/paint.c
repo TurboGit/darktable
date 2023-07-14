@@ -320,13 +320,6 @@ void dtgtk_cairo_paint_switch(cairo_t *cr, gint x, gint y, gint w, gint h, gint 
   cairo_line_to(cr, 0.5, 0.5);
   cairo_stroke(cr);
 
-  if(flags & CPF_FOCUS) // If focused add some diffuse light
-  {
-    cairo_arc(cr, 0.5, 0.5, 0.45, 0.0, 2*M_PI);
-    cairo_clip(cr);
-    cairo_paint_with_alpha(cr, 0.4);
-  }
-
   FINISH
 }
 
@@ -338,13 +331,6 @@ void dtgtk_cairo_paint_switch_inactive(cairo_t *cr, gint x, gint y, gint w, gint
   cairo_move_to(cr, 0.5, 0.0);
   cairo_line_to(cr, 0.5, 0.5);
   cairo_stroke(cr);
-
-  if(flags & CPF_FOCUS) // If focused add some diffuse light
-  {
-    cairo_arc(cr, 0.5, 0.5, 0.45, 0.0, 2*M_PI);
-    cairo_clip(cr);
-    cairo_paint_with_alpha(cr, 0.4);
-  }
 
   FINISH
 }
@@ -358,13 +344,6 @@ void dtgtk_cairo_paint_switch_on(cairo_t *cr, gint x, gint y, gint w, gint h, gi
 
   cairo_arc(cr, 0.5, 0.5, 0.30, 0, 2 * M_PI);
   cairo_fill(cr);
-
-  if(flags & CPF_FOCUS)
-  {
-    cairo_arc(cr, 0.5, 0.5, 0.50, 0.0, 2*M_PI);
-    cairo_clip(cr);
-    cairo_paint_with_alpha(cr, 0.5);
-  }
 
   FINISH
 }
