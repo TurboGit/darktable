@@ -108,7 +108,6 @@ typedef struct dt_iop_channelmixer_rgb_params_t
   dt_iop_channelmixer_rgb_version_t version; // $DEFAULT: CHANNELMIXERRGB_V_3 $DESCRIPTION: "saturation algorithm"
 
   /* always add new params after this so we can import legacy params with memcpy on the common part of the struct */
-
 } dt_iop_channelmixer_rgb_params_t;
 
 
@@ -137,9 +136,9 @@ typedef struct dt_iop_channelmixer_rgb_gui_data_t
   GtkNotebook *notebook;
   GtkWidget *illuminant, *temperature, *adaptation, *gamut, *clip;
   GtkWidget *illum_fluo, *illum_led, *illum_x, *illum_y, *approx_cct, *illum_color;
-  GtkWidget *scale_red_R, *scale_red_G, *scale_red_B;
-  GtkWidget *scale_green_R, *scale_green_G, *scale_green_B;
-  GtkWidget *scale_blue_R, *scale_blue_G, *scale_blue_B;
+  GtkWidget *scale_red_R, *scale_red_G, *scale_red_B, *scale_red_shift;
+  GtkWidget *scale_green_R, *scale_green_G, *scale_green_B, *scale_green_shift;
+  GtkWidget *scale_blue_R, *scale_blue_G, *scale_blue_B, *scale_blue_shift;
   GtkWidget *scale_saturation_R, *scale_saturation_G, *scale_saturation_B, *saturation_version;
   GtkWidget *scale_lightness_R, *scale_lightness_G, *scale_lightness_B;
   GtkWidget *scale_grey_R, *scale_grey_G, *scale_grey_B;
@@ -3778,6 +3777,11 @@ void gui_reset(dt_iop_module_t *self)
     (dt_iop_channelmixer_rgb_gui_data_t *)self->gui_data;
   g->is_profiling_started = FALSE;
   dt_iop_color_picker_reset(self, TRUE);
+
+  dt_bauhaus_slider_set(g->scale_red_shift, 0);
+  dt_bauhaus_slider_set(g->scale_green_shift, 0);
+  dt_bauhaus_slider_set(g->scale_blue_shift, 0);
+
   gui_changed(self, NULL, NULL);
 }
 
@@ -3988,6 +3992,133 @@ static void _spot_settings_changed_callback(GtkWidget *slider, dt_iop_module_t *
   // else : just record new values and do nothing
 }
 
+static void _reset_red_shift_callback(GtkWidget *slider, gpointer user_data)
+{
+  dt_iop_module_t *self = (dt_iop_module_t *)user_data;
+  dt_iop_channelmixer_rgb_gui_data_t *g =
+    (dt_iop_channelmixer_rgb_gui_data_t *)self->gui_data;
+  if(darktable.gui->reset) return;
+  darktable.gui->reset++;
+  dt_bauhaus_slider_set(g->scale_red_shift, NAN);
+  darktable.gui->reset--;
+}
+
+static void _reset_green_shift_callback(GtkWidget *slider, gpointer user_data)
+{
+  dt_iop_module_t *self = (dt_iop_module_t *)user_data;
+  dt_iop_channelmixer_rgb_gui_data_t *g =
+    (dt_iop_channelmixer_rgb_gui_data_t *)self->gui_data;
+  if(darktable.gui->reset) return;
+  darktable.gui->reset++;
+  dt_bauhaus_slider_set(g->scale_green_shift, NAN);
+  darktable.gui->reset--;
+}
+
+static void _reset_blue_shift_callback(GtkWidget *slider, gpointer user_data)
+{
+  dt_iop_module_t *self = (dt_iop_module_t *)user_data;
+  dt_iop_channelmixer_rgb_gui_data_t *g =
+    (dt_iop_channelmixer_rgb_gui_data_t *)self->gui_data;
+  if(darktable.gui->reset) return;
+  darktable.gui->reset++;
+  dt_bauhaus_slider_set(g->scale_blue_shift, NAN);
+  darktable.gui->reset--;
+}
+
+static float deg2rad(const float deg)
+{
+  return (deg * M_PI / 180.0);
+}
+
+static void _compute_rotation_mat(GtkWidget *slider, float rot[3])
+{
+  const float angle = dt_bauhaus_slider_get(slider);
+  const float cosA = cosf(deg2rad(angle));
+  const float sinA = sinf(deg2rad(angle));
+  const float onethird = 1.0f/3.0f;
+
+  rot[0] = cosA + (1.0f - cosA) / 3.0f;
+  rot[1] = (1.0f - cosA) / 3.0f - sqrtf(onethird) * sinA;
+  rot[2] = (1.0f - cosA) / 3.0f + sqrtf(onethird) * sinA;
+}
+
+static void _shift_red_callback(GtkWidget *slider, gpointer user_data)
+{
+  dt_iop_module_t *self = (dt_iop_module_t *)user_data;
+  dt_iop_channelmixer_rgb_params_t *p =
+    (dt_iop_channelmixer_rgb_params_t *)self->params;
+  dt_iop_channelmixer_rgb_gui_data_t *g =
+    (dt_iop_channelmixer_rgb_gui_data_t *)self->gui_data;
+  if(darktable.gui->reset) return;
+
+  float rot[3] = { 0.0f };
+  _compute_rotation_mat(slider, rot);
+
+  p->red[0] = rot[0];
+  p->red[1] = rot[2];
+  p->red[2] = rot[1];
+
+  darktable.gui->reset++;
+  dt_bauhaus_slider_set(g->scale_red_R, p->red[0]);
+  dt_bauhaus_slider_set(g->scale_red_G, p->red[1]);
+  dt_bauhaus_slider_set(g->scale_red_B, p->red[2]);
+  darktable.gui->reset--;
+
+  gui_changed(self, NULL, NULL);
+  dt_dev_add_history_item(darktable.develop, self, TRUE);
+}
+
+static void _shift_green_callback(GtkWidget *slider, gpointer user_data)
+{
+  dt_iop_module_t *self = (dt_iop_module_t *)user_data;
+  dt_iop_channelmixer_rgb_params_t *p =
+    (dt_iop_channelmixer_rgb_params_t *)self->params;
+  dt_iop_channelmixer_rgb_gui_data_t *g =
+    (dt_iop_channelmixer_rgb_gui_data_t *)self->gui_data;
+  if(darktable.gui->reset) return;
+
+  float rot[3] = { 0.0f };
+  _compute_rotation_mat(slider, rot);
+
+  p->green[0] = rot[1];
+  p->green[1] = rot[0];
+  p->green[2] = rot[2];
+
+  darktable.gui->reset++;
+  dt_bauhaus_slider_set(g->scale_green_R, p->green[0]);
+  dt_bauhaus_slider_set(g->scale_green_G, p->green[1]);
+  dt_bauhaus_slider_set(g->scale_green_B, p->green[2]);
+  darktable.gui->reset--;
+
+  gui_changed(self, NULL, NULL);
+  dt_dev_add_history_item(darktable.develop, self, TRUE);
+}
+
+static void _shift_blue_callback(GtkWidget *slider, gpointer user_data)
+{
+  dt_iop_module_t *self = (dt_iop_module_t *)user_data;
+  dt_iop_channelmixer_rgb_params_t *p =
+    (dt_iop_channelmixer_rgb_params_t *)self->params;
+  dt_iop_channelmixer_rgb_gui_data_t *g =
+    (dt_iop_channelmixer_rgb_gui_data_t *)self->gui_data;
+  if(darktable.gui->reset) return;
+
+  float rot[3] = { 0.0f };
+  _compute_rotation_mat(slider, rot);
+
+  p->blue[0] = rot[2];
+  p->blue[1] = rot[1];
+  p->blue[2] = rot[0];
+
+  darktable.gui->reset++;
+  dt_bauhaus_slider_set(g->scale_blue_R, p->blue[0]);
+  dt_bauhaus_slider_set(g->scale_blue_G, p->blue[1]);
+  dt_bauhaus_slider_set(g->scale_blue_B, p->blue[2]);
+  darktable.gui->reset--;
+
+  gui_changed(self, NULL, NULL);
+  dt_dev_add_history_item(darktable.develop, self, TRUE);
+}
 
 void gui_changed(dt_iop_module_t *self, GtkWidget *w, void *previous)
 {
@@ -4643,7 +4774,23 @@ void gui_init(struct dt_iop_module_t *self)
 
   gtk_box_pack_start(GTK_BOX(g->csspot.container), GTK_WIDGET(hhbox), FALSE, FALSE, 0);
 
-  GtkWidget *first, *second, *third;
+  GtkWidget *first, *second, *third, *fourth;
+
+#define NOTEBOOK_HS_PAGE(var, section)                                            \
+  fourth = dt_bauhaus_slider_new_with_range(self, -180.0f, 180.0f, .5f, 0.0f, 1); \
+  dt_bauhaus_widget_set_label(fourth, section, N_("hue shift"));                  \
+  dt_bauhaus_slider_set_format(fourth, "°");                                      \
+  g->scale_##var##_shift = fourth;                                                \
+  gtk_box_pack_start(GTK_BOX(self->widget), fourth, TRUE, TRUE, 0);               \
+  g_signal_connect(G_OBJECT(fourth), "value-changed",                             \
+                   G_CALLBACK(_shift_##var##_callback), self);                    \
+  g_signal_connect(G_OBJECT(first), "value-changed",                              \
+                   G_CALLBACK(_reset_##var##_shift_callback), self);              \
+  g_signal_connect(G_OBJECT(second), "value-changed",                             \
+                   G_CALLBACK(_reset_##var##_shift_callback), self);              \
+  g_signal_connect(G_OBJECT(third), "value-changed",                              \
+                   G_CALLBACK(_reset_##var##_shift_callback), self);
+
 #define NOTEBOOK_PAGE(var, short, label, tooltip, section, swap, soft_range, sr_min, sr_max) \
   self->widget = dt_ui_notebook_page(g->notebook, label, _(tooltip));            \
                                                                                  \
@@ -4666,12 +4813,21 @@ void gui_init(struct dt_iop_module_t *self)
   g->scale_##var##_G = second;                                                   \
   g->scale_##var##_B = swap ? first : third;                                     \
                                                                                  \
+  NOTEBOOK_HS_PAGE(var, section)                                                 \
+                                                                                 \
   g->normalize_##short = dt_bauhaus_toggle_from_params                           \
                (DT_IOP_SECTION_FOR_PARAMS(self, section), "normalize_" #short);
 
-  NOTEBOOK_PAGE(red, R, N_("R"), N_("output R"), N_("red"), FALSE, FALSE, 0.0, 0.0)
-  NOTEBOOK_PAGE(green, G, N_("G"), N_("output G"), N_("green"), FALSE, FALSE, 0.0, 0.0)
-  NOTEBOOK_PAGE(blue, B, N_("B"), N_("output B"), N_("blue"), FALSE, FALSE, 0.0, 0.0)
+  NOTEBOOK_PAGE(red, R, N_("R"), N_("output R"), N_("red"),
+                FALSE, FALSE, 0.0, 0.0)
+  NOTEBOOK_PAGE(green, G, N_("G"), N_("output G"), N_("green"),
+                FALSE, FALSE, 0.0, 0.0)
+  NOTEBOOK_PAGE(blue, B, N_("B"), N_("output B"), N_("blue"),
+                FALSE, FALSE, 0.0, 0.0)
+
+#undef NOTEBOOK_HS_PAGE
+#define NOTEBOOK_HS_PAGE(a, b)
+
   NOTEBOOK_PAGE(saturation, sat,
                 N_("colorfulness"), N_("output colorfulness"), N_("colorfulness"),
                 FALSE, TRUE, -1.0, 1.0)
@@ -4680,7 +4836,8 @@ void gui_init(struct dt_iop_module_t *self)
                 N_("brightness"), N_("output brightness"), N_("brightness"),
                 FALSE, TRUE, -1.0, 1.0)
   NOTEBOOK_PAGE(grey, grey,
-                N_("gray"), N_("output gray"), N_("gray"), FALSE, TRUE, 0.0, 1.0)
+                N_("gray"), N_("output gray"), N_("gray"),
+                FALSE, TRUE, 0.0, 1.0)
 
   // start building top level widget
   self->widget = gtk_box_new(GTK_ORIENTATION_VERTICAL, DT_BAUHAUS_SPACE);
