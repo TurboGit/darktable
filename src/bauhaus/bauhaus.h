@@ -91,6 +91,7 @@ typedef struct dt_bauhaus_slider_data_t
   int is_changed : 1;   // indicates new data
   guint timeout_handle; // used to store id of timeout routine
   float (*curve)(float, dt_bauhaus_curve_t); // callback function
+  gboolean undefined;
 } dt_bauhaus_slider_data_t;
 
 typedef enum dt_bauhaus_combobox_alignment_t

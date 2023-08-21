@@ -2765,7 +2765,10 @@ float dt_bauhaus_slider_get_val(GtkWidget *widget)
 char *dt_bauhaus_slider_get_text(GtkWidget *w, float val)
 {
   const dt_bauhaus_slider_data_t *d = &DT_BAUHAUS_WIDGET(w)->data.slider;
-  if((d->hard_max * d->factor + d->offset)*(d->hard_min * d->factor + d->offset) < 0)
+
+  if(d->undefined)
+    return g_strdup_printf(_("undefined"));
+  else if((d->hard_max * d->factor + d->offset)*(d->hard_min * d->factor + d->offset) < 0)
     return g_strdup_printf("%+.*f%s", d->digits, val * d->factor + d->offset, d->format);
   else
     return g_strdup_printf( "%.*f%s", d->digits, val * d->factor + d->offset, d->format);
@@ -2773,12 +2776,19 @@ char *dt_bauhaus_slider_get_text(GtkWidget *w, float val)
 
 void dt_bauhaus_slider_set(GtkWidget *widget, float pos)
 {
-  if(dt_isnan(pos)) return;
-
-  // this is the public interface function, translate by bounds and call set_normalized
   dt_bauhaus_widget_t *w = (dt_bauhaus_widget_t *)DT_BAUHAUS_WIDGET(widget);
   if(w->type != DT_BAUHAUS_SLIDER) return;
   dt_bauhaus_slider_data_t *d = &w->data.slider;
+
+  if(dt_isnan(pos))
+  {
+    d->undefined = TRUE;
+    return;
+  }
+  else
+    d->undefined = FALSE;
+
+  // this is the public interface function, translate by bounds and call set_normalized
   const float rpos = CLAMP(pos, d->hard_min, d->hard_max);
   // if this is an angle or gradient, wrap around
   // don't wrap yet if exactly at min or max
@@ -3004,6 +3014,7 @@ static void _slider_value_change(dt_bauhaus_widget_t *w)
 static gboolean _slider_value_change_dragging(gpointer data)
 {
   dt_bauhaus_widget_t *w = data;
+  w->data.slider.undefined = FALSE;
   w->data.slider.timeout_handle = 0;
   _slider_value_change(w);
   return G_SOURCE_REMOVE;
@@ -3119,6 +3130,8 @@ static gboolean _slider_button_press(GtkWidget *widget, GdkEventButton *event, g
   bauhaus_request_focus(w);
   gtk_widget_grab_focus(widget);
 
+  dt_bauhaus_slider_data_t *d = &w->data.slider;
+  d->undefined = FALSE;
   GtkAllocation allocation;
   gtk_widget_get_allocation(widget, &allocation);
   const int w3 = allocation.width - w->margin.left - w->padding.left - w->margin.right - w->padding.right;
@@ -3141,7 +3154,6 @@ static gboolean _slider_button_press(GtkWidget *widget, GdkEventButton *event, g
   }
   else if(event->button == 1)
   {
-    dt_bauhaus_slider_data_t *d = &w->data.slider;
     // reset to default.
     if(event->type == GDK_2BUTTON_PRESS)
     {
