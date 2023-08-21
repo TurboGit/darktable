@@ -295,39 +295,46 @@ GtkWidget *dt_bauhaus_slider_new_action(dt_action_t *self, float min, float max,
                                         float defval, int digits);
 
 // outside doesn't see the real type, we cast it internally.
-void dt_bauhaus_slider_set(GtkWidget *w, float pos);
-void dt_bauhaus_slider_set_val(GtkWidget *w, float val);
+void dt_bauhaus_slider_set(GtkWidget *w, const float pos);
+void dt_bauhaus_slider_set_val(GtkWidget *w, const float val);
 float dt_bauhaus_slider_get(GtkWidget *w);
 float dt_bauhaus_slider_get_val(GtkWidget *w);
-char *dt_bauhaus_slider_get_text(GtkWidget *w, float val);
+char *dt_bauhaus_slider_get_text(GtkWidget *w, const float val);
 
-void dt_bauhaus_slider_set_soft_min(GtkWidget* w, float val);
+void dt_bauhaus_slider_set_soft_min(GtkWidget* w, const float val);
 float dt_bauhaus_slider_get_soft_min(GtkWidget* w);
-void dt_bauhaus_slider_set_soft_max(GtkWidget* w, float val);
+void dt_bauhaus_slider_set_soft_max(GtkWidget* w, const float val);
 float dt_bauhaus_slider_get_soft_max(GtkWidget* w);
-void dt_bauhaus_slider_set_soft_range(GtkWidget *widget, float soft_min, float soft_max);
+void dt_bauhaus_slider_set_soft_range(GtkWidget *widget,
+                                      const float soft_min,
+                                      const float soft_max);
 
-void dt_bauhaus_slider_set_hard_min(GtkWidget* w, float val);
+void dt_bauhaus_slider_set_hard_min(GtkWidget* w, const float val);
 float dt_bauhaus_slider_get_hard_min(GtkWidget* w);
-void dt_bauhaus_slider_set_hard_max(GtkWidget* w, float val);
+void dt_bauhaus_slider_set_hard_max(GtkWidget* w, const float val);
 float dt_bauhaus_slider_get_hard_max(GtkWidget* w);
 
-void dt_bauhaus_slider_set_digits(GtkWidget *w, int val);
+void dt_bauhaus_slider_set_digits(GtkWidget *w, const int val);
 int dt_bauhaus_slider_get_digits(GtkWidget *w);
-void dt_bauhaus_slider_set_step(GtkWidget *w, float val);
+void dt_bauhaus_slider_set_step(GtkWidget *w, const float val);
 float dt_bauhaus_slider_get_step(GtkWidget *w);
 
-void dt_bauhaus_slider_set_feedback(GtkWidget *w, int feedback);
+void dt_bauhaus_slider_set_feedback(GtkWidget *w, const int feedback);
 int dt_bauhaus_slider_get_feedback(GtkWidget *w);
 
 void dt_bauhaus_slider_set_format(GtkWidget *w, const char *format);
-void dt_bauhaus_slider_set_factor(GtkWidget *w, float factor);
-void dt_bauhaus_slider_set_offset(GtkWidget *w, float offset);
-void dt_bauhaus_slider_set_stop(GtkWidget *widget, float stop, float r, float g, float b);
+void dt_bauhaus_slider_set_factor(GtkWidget *w, const float factor);
+void dt_bauhaus_slider_set_offset(GtkWidget *w, const float offset);
+void dt_bauhaus_slider_set_stop(GtkWidget *widget,
+                                const float stop,
+                                const float r,
+                                const float g,
+                                const float b);
 void dt_bauhaus_slider_clear_stops(GtkWidget *widget);
 void dt_bauhaus_slider_set_default(GtkWidget *widget, float def);
 float dt_bauhaus_slider_get_default(GtkWidget *widget);
-void dt_bauhaus_slider_set_curve(GtkWidget *widget, float (*curve)(float value, dt_bauhaus_curve_t dir));
+void dt_bauhaus_slider_set_curve(GtkWidget *widget,
+                                 float (*curve)(float value, dt_bauhaus_curve_t dir));
 void dt_bauhaus_slider_set_log_curve(GtkWidget *widget);
 
 // combobox:
@@ -401,4 +408,3 @@ static inline void set_color(cairo_t *cr, GdkRGBA color)
 // vim: shiftwidth=2 expandtab tabstop=2 cindent
 // kate: tab-indents: off; indent-width 2; replace-tabs on; indent-mode cstyle; remove-trailing-spaces modified;
 // clang-format on
-
