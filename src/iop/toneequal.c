@@ -728,6 +728,47 @@ static float get_luminance_from_buffer(const float *const buffer,
   return luminance;
 }
 
+static void _get_point(struct dt_iop_module_t *module,
+                       const int c_x,
+                       const int c_y,
+                       int *x,
+                       int *y)
+{
+  const double crop_order =
+    dt_ioppr_get_iop_order(module->dev->iop_order_list, "crop", 0);
+
+  float pts[2] = { c_x, c_y };
+
+  // only a forward backtransform as the buffer already contains all the transforms
+  // done before toneequal and we are speaking of on-screen cursor coordinates.
+  // also we do transform only after crop as crop does change roi for the whole pipe
+  // and so it is already part of the preview buffer cached in this implementation.
+  dt_dev_distort_backtransform_plus(darktable.develop, darktable.develop->preview_pipe,
+                                    crop_order,
+                                    DT_DEV_TRANSFORM_DIR_FORW_EXCL, pts, 1);
+  *x = pts[0];
+  *y = pts[1];
+}
+
+static float _luminance_from_module_buffer(dt_iop_module_t *self)
+{
+  dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
+
+  const size_t c_x = g->cursor_pos_x;
+  const size_t c_y = g->cursor_pos_y;
+
+  // get buffer x,y given the cursor position
+  int b_x = 0;
+  int b_y = 0;
+
+  _get_point(self, c_x, c_y, &b_x, &b_y);
+
+  return get_luminance_from_buffer(g->thumb_preview_buf,
+                                   g->thumb_preview_buf_width,
+                                   g->thumb_preview_buf_height,
+                                   b_x,
+                                   b_y);
+}
 
 /***
  * Exposure compensation computation
@@ -2111,10 +2152,11 @@ int mouse_moved(dt_iop_module_t *self,
   dt_iop_gui_leave_critical_section(self);
   if(fail) return 0;
 
+  if(g == NULL) return 0;
+
+  // compute the on-screen point where the mouse cursor is
   float wd, ht;
   if(!dt_dev_get_preview_size(dev, &wd, &ht)) return 0;
-
-  if(g == NULL) return 0;
 
   const int x_pointer = pzx * wd;
   const int y_pointer = pzy * ht;
@@ -2137,12 +2179,7 @@ int mouse_moved(dt_iop_module_t *self,
 
   // store the actual exposure too, to spare I/O op
   if(g->cursor_valid && !dev->full.pipe->processing && g->luminance_valid)
-    g->cursor_exposure =
-      log2f(get_luminance_from_buffer(g->thumb_preview_buf,
-                                      g->thumb_preview_buf_width,
-                                      g->thumb_preview_buf_height,
-                                      (size_t)x_pointer,
-                                      (size_t)y_pointer));
+    g->cursor_exposure = log2f(_luminance_from_module_buffer(self));
 
   switch_cursors(self);
   return 1;
@@ -2268,12 +2305,7 @@ int scrolled(struct dt_iop_module_t *self,
 
   // re-read the exposure in case it has changed
   dt_iop_gui_enter_critical_section(self);
-  g->cursor_exposure =
-    log2f(get_luminance_from_buffer(g->thumb_preview_buf,
-                                    g->thumb_preview_buf_width,
-                                    g->thumb_preview_buf_height,
-                                    (size_t)g->cursor_pos_x,
-                                    (size_t)g->cursor_pos_y));
+  g->cursor_exposure = log2f(_luminance_from_module_buffer(self));
 
   dt_iop_gui_leave_critical_section(self);
 
@@ -2437,6 +2469,10 @@ void gui_post_expose(dt_iop_module_t *self,
   if(!g->graph_valid)
     if(!_init_drawing(self, self->widget, g)) return;
 
+  // re-read the exposure in case it has changed
+  if(g->luminance_valid && self->enabled)
+    g->cursor_exposure = log2f(_luminance_from_module_buffer(self));
+
   dt_iop_gui_enter_critical_section(self);
 
   // Get coordinates
@@ -2450,14 +2486,6 @@ void gui_post_expose(dt_iop_module_t *self,
   float luminance_out = 0.0f;
   if(g->luminance_valid && self->enabled)
   {
-    // re-read the exposure in case it has changed
-    g->cursor_exposure =
-      log2f(get_luminance_from_buffer(g->thumb_preview_buf,
-                                      g->thumb_preview_buf_width,
-                                      g->thumb_preview_buf_height,
-                                      (size_t)g->cursor_pos_x,
-                                      (size_t)g->cursor_pos_y));
-
     // Get the corresponding exposure
     exposure_in = g->cursor_exposure;
     luminance_in = exp2f(exposure_in);
