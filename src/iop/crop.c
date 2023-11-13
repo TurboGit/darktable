@@ -421,6 +421,8 @@ void commit_params(struct dt_iop_module_t *self,
     d->cw = CLAMPF(p->cw, 0.1f, 1.0f);
     d->ch = CLAMPF(p->ch, 0.1f, 1.0f);
   }
+
+  DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_CONTROL_CROP);
 }
 
 

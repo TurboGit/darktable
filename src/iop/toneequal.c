@@ -306,6 +306,7 @@ typedef struct dt_iop_toneequalizer_gui_data_t
                                 // interactive view are in bounds
   gboolean factors_valid;       // TRUE if radial-basis coeffs are ready
 
+  gboolean crop_signal_actif;
 } dt_iop_toneequalizer_gui_data_t;
 
 
@@ -1048,6 +1049,7 @@ void toneeq_process(struct dt_iop_module_t *self,
                     const dt_iop_roi_t *const roi_in,
                     const dt_iop_roi_t *const roi_out)
 {
+  printf("TEQ PROCESS\n");
   const dt_iop_toneequalizer_data_t *const d =
     (const dt_iop_toneequalizer_data_t *const)piece->data;
   dt_iop_toneequalizer_gui_data_t *const g =
@@ -2603,6 +2605,56 @@ void gui_post_expose(dt_iop_module_t *self,
   }
 }
 
+static void _unset_crop_signal(dt_iop_module_t *self);
+
+static void _develop_crop_callback(gpointer instance,
+                                   gpointer user_data)
+{
+  dt_iop_module_t *self = (dt_iop_module_t *)user_data;
+  dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
+  if(g == NULL) return;
+
+  _unset_crop_signal(self);
+
+  printf("redraw callback...\n");
+  // g->luminance_valid = FALSE;
+  // invalidate_luminance_cache(self);
+  dt_dev_invalidate_all(darktable.develop);
+
+  dt_dev_pixelpipe_cache_flush(darktable.develop->preview_pipe);
+  self->dev->preview_pipe->backbuf_hash = 0;
+
+  //  dt_control_queue_redraw_center();
+  dt_dev_reprocess_preview(darktable.develop);
+  dt_dev_reprocess_all(darktable.develop);
+
+//  dt_dev_add_history_item(darktable.develop, self, FALSE);
+}
+
+static void _set_crop_signal(dt_iop_module_t *self)
+{
+  dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
+  if(!g->crop_signal_actif)
+  {
+    DT_DEBUG_CONTROL_SIGNAL_CONNECT
+      (darktable.signals,
+       DT_SIGNAL_CONTROL_CROP,
+       G_CALLBACK(_develop_crop_callback), self);
+    g->crop_signal_actif = TRUE;
+  }
+}
+
+static void _unset_crop_signal(dt_iop_module_t *self)
+{
+  dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
+  if(g->crop_signal_actif)
+  {
+    DT_DEBUG_CONTROL_SIGNAL_DISCONNECT
+      (darktable.signals,
+       G_CALLBACK(_develop_crop_callback), self);
+    g->crop_signal_actif = FALSE;
+  }
+}
 
 void gui_focus(struct dt_iop_module_t *self, gboolean in)
 {
@@ -2620,6 +2672,8 @@ void gui_focus(struct dt_iop_module_t *self, gboolean in)
     if(was_mask)
       dt_dev_reprocess_center(self->dev);
     dt_collection_hint_message(darktable.collection);
+
+    _unset_crop_signal(self);
   }
   else
   {
@@ -2627,6 +2681,7 @@ void gui_focus(struct dt_iop_module_t *self, gboolean in)
                               _("scroll over image to change tone exposure\n"
                                 "shift+scroll for large steps; "
                                 "ctrl+scroll for small steps"));
+    _set_crop_signal(self);
   }
 }
 
@@ -3337,7 +3392,6 @@ static void _develop_ui_pipe_finished_callback(gpointer instance,
   switch_cursors(self);
 }
 
-
 void gui_reset(struct dt_iop_module_t *self)
 {
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
@@ -3588,7 +3642,6 @@ void gui_init(struct dt_iop_module_t *self)
      DT_SIGNAL_DEVELOP_HISTORY_CHANGE,
      G_CALLBACK(_develop_ui_pipe_started_callback), self);
 }
-
 
 void gui_cleanup(struct dt_iop_module_t *self)
 {
