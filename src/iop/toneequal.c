@@ -2621,10 +2621,10 @@ static void _develop_crop_callback(gpointer instance,
   printf("redraw callback...\n");
   // g->luminance_valid = FALSE;
   // invalidate_luminance_cache(self);
-  dt_dev_invalidate_all(darktable.develop);
+  //  dt_dev_invalidate_all(darktable.develop);
 
-  dt_dev_pixelpipe_cache_flush(darktable.develop->preview_pipe);
-  self->dev->preview_pipe->backbuf_hash = 0;
+  //  dt_dev_pixelpipe_cache_flush(darktable.develop->preview_pipe);
+  //  self->dev->preview_pipe->backbuf_hash = 0;
 
   //  dt_control_queue_redraw_center();
   dt_dev_reprocess_preview(darktable.develop);
@@ -2641,7 +2641,7 @@ static void _set_crop_signal(dt_iop_module_t *self)
     printf("SIGNAL crop set\n");
     DT_DEBUG_CONTROL_SIGNAL_CONNECT
       (darktable.signals,
-       DT_SIGNAL_CONTROL_CROP,
+       DT_SIGNAL_DEVELOP_DISTORT,
        G_CALLBACK(_develop_crop_callback), self);
     g->crop_signal_actif = TRUE;
   }

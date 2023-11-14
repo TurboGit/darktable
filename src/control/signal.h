@@ -52,11 +52,6 @@ typedef enum dt_signal_t
    */
   DT_SIGNAL_CONTROL_REDRAW_CENTER,
 
-  /** \brief This signal is raised when dt_control_queue_redraw_center() is called.
-    no param, no returned value
-   */
-  DT_SIGNAL_CONTROL_CROP,
-
   /** \brief This signal is raised by viewmanager when a view has changed.
     1 : dt_view_t * the old view
     2 : dt_view_t * the new (current) view
@@ -195,6 +190,11 @@ typedef enum dt_signal_t
 
   /** \brief This signal is raised when image is changed in darkroom */
   DT_SIGNAL_DEVELOP_IMAGE_CHANGED,
+
+  /** \brief This signal is raised when a distort module is used/changed
+    no param, no returned value
+   */
+  DT_SIGNAL_DEVELOP_DISTORT,
 
   /** \brief This signal is raised when image is removed from database */
   DT_SIGNAL_IMAGE_REMOVED,

@@ -1083,10 +1083,11 @@ static gboolean _gui_off_button_press(GtkWidget *w, GdkEventButton *e, gpointer 
     return TRUE;
   }
 
-  if(!strcmp(module->op, "crop"))
+  //  if(!strcmp(module->op, "crop"))
+  if(module->operation_tags() & IOP_TAG_DISTORT)
   {
-    printf("send crop signal\n");
-    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_CONTROL_CROP);
+    printf("ON/OFF send crop signal\n");
+    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_DEVELOP_DISTORT);
   }
   return FALSE;
 }
@@ -2088,6 +2089,13 @@ void dt_iop_commit_params(dt_iop_module_t *module,
     piece->hash = hash;
 
     free(str);
+  }
+
+  //  if(!strcmp(module->op, "crop"))
+  if(module->operation_tags() & IOP_TAG_DISTORT)
+  {
+    printf("COMMIT send crop signal\n");
+    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_DEVELOP_DISTORT);
   }
 }
 
