@@ -309,6 +309,8 @@ typedef struct dt_iop_toneequalizer_gui_data_t
   gboolean crop_signal_actif;
 } dt_iop_toneequalizer_gui_data_t;
 
+static void _set_crop_signal(dt_iop_module_t *self);
+static void _unset_crop_signal(dt_iop_module_t *self);
 
 const char *name()
 {
@@ -2146,6 +2148,8 @@ int mouse_moved(dt_iop_module_t *self,
   // all distortions, cropping, rotations etc. are applied before this
   // module in the pipe.
 
+  _set_crop_signal(self);
+
   const dt_develop_t *dev = self->dev;
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
 
@@ -2605,8 +2609,6 @@ void gui_post_expose(dt_iop_module_t *self,
   }
 }
 
-static void _unset_crop_signal(dt_iop_module_t *self);
-
 static void _develop_crop_callback(gpointer instance,
                                    gpointer user_data)
 {
@@ -2626,7 +2628,7 @@ static void _develop_crop_callback(gpointer instance,
 
   //  dt_control_queue_redraw_center();
   dt_dev_reprocess_preview(darktable.develop);
-  dt_dev_reprocess_all(darktable.develop);
+  // dt_dev_reprocess_all(darktable.develop);
 
 //  dt_dev_add_history_item(darktable.develop, self, FALSE);
 }
@@ -2636,6 +2638,7 @@ static void _set_crop_signal(dt_iop_module_t *self)
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
   if(!g->crop_signal_actif)
   {
+    printf("SIGNAL crop set\n");
     DT_DEBUG_CONTROL_SIGNAL_CONNECT
       (darktable.signals,
        DT_SIGNAL_CONTROL_CROP,
@@ -2649,6 +2652,7 @@ static void _unset_crop_signal(dt_iop_module_t *self)
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
   if(g->crop_signal_actif)
   {
+    printf("SIGNAL crop unset\n");
     DT_DEBUG_CONTROL_SIGNAL_DISCONNECT
       (darktable.signals,
        G_CALLBACK(_develop_crop_callback), self);

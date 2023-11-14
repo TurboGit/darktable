@@ -440,6 +440,7 @@ static void _event_preview_updated_callback(gpointer instance, dt_iop_module_t *
 
 void gui_focus(struct dt_iop_module_t *self, gboolean in)
 {
+  printf("CROP focus!\n");
   darktable.develop->history_postpone_invalidate =
     in && dt_dev_modulegroups_get_activated(darktable.develop) != DT_MODULEGROUP_BASICS;
 
@@ -984,6 +985,7 @@ void gui_reset(struct dt_iop_module_t *self)
 
 void gui_update(struct dt_iop_module_t *self)
 {
+  printf("CROP update\n");
   dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
   dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)self->params;
 

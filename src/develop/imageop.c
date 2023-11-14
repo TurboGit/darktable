@@ -1082,6 +1082,12 @@ static gboolean _gui_off_button_press(GtkWidget *w, GdkEventButton *e, gpointer 
     dt_iop_request_focus(dt_dev_gui_module() == module ? NULL : module);
     return TRUE;
   }
+
+  if(!strcmp(module->op, "crop"))
+  {
+    printf("send crop signal\n");
+    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_CONTROL_CROP);
+  }
   return FALSE;
 }
 
@@ -2197,6 +2203,7 @@ static gboolean _presets_scroll_callback(GtkWidget *widget,
 
 void dt_iop_request_focus(dt_iop_module_t *module)
 {
+  printf("REQUEST focus\n");
   dt_develop_t *dev = darktable.develop;
   dt_iop_module_t *out_focus_module = dev->gui_module;
 
