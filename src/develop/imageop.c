@@ -1077,18 +1077,18 @@ static gboolean _gui_multiinstance_callback(GtkButton *button,
 static gboolean _gui_off_button_press(GtkWidget *w, GdkEventButton *e, gpointer user_data)
 {
   dt_iop_module_t *module = (dt_iop_module_t *)user_data;
+
+  if(module->operation_tags() & IOP_TAG_DISTORT)
+  {
+    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_DEVELOP_DISTORT);
+  }
+
   if(!darktable.gui->reset && dt_modifier_is(e->state, GDK_CONTROL_MASK))
   {
     dt_iop_request_focus(dt_dev_gui_module() == module ? NULL : module);
     return TRUE;
   }
 
-  //  if(!strcmp(module->op, "crop"))
-  if(module->operation_tags() & IOP_TAG_DISTORT)
-  {
-    printf("ON/OFF send crop signal\n");
-    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_DEVELOP_DISTORT);
-  }
   return FALSE;
 }
 
@@ -2091,10 +2091,8 @@ void dt_iop_commit_params(dt_iop_module_t *module,
     free(str);
   }
 
-  //  if(!strcmp(module->op, "crop"))
   if(module->operation_tags() & IOP_TAG_DISTORT)
   {
-    printf("COMMIT send crop signal\n");
     DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_DEVELOP_DISTORT);
   }
 }
@@ -2211,7 +2209,6 @@ static gboolean _presets_scroll_callback(GtkWidget *widget,
 
 void dt_iop_request_focus(dt_iop_module_t *module)
 {
-  printf("REQUEST focus\n");
   dt_develop_t *dev = darktable.develop;
   dt_iop_module_t *out_focus_module = dev->gui_module;
 
@@ -2220,7 +2217,9 @@ void dt_iop_request_focus(dt_iop_module_t *module)
   if(!darktable.lib->proxy.colorpicker.restrict_histogram)
     dt_iop_color_picker_reset(NULL, TRUE);
 
-  if(darktable.gui->reset || (out_focus_module == module)) return;
+  if(darktable.gui->reset
+     || (out_focus_module == module))
+    return;
 
   dev->gui_module = module;
   dev->focus_hash = TRUE;

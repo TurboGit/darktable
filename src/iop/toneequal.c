@@ -306,11 +306,13 @@ typedef struct dt_iop_toneequalizer_gui_data_t
                                 // interactive view are in bounds
   gboolean factors_valid;       // TRUE if radial-basis coeffs are ready
 
-  gboolean crop_signal_actif;
+  gboolean distort_signal_actif;
 } dt_iop_toneequalizer_gui_data_t;
 
-static void _set_crop_signal(dt_iop_module_t *self);
-static void _unset_crop_signal(dt_iop_module_t *self);
+/* the signal DT_SIGNAL_DEVELOP_DISTORT is used to refresh the internal
+   cached image buffer used for the on-canvas luminance picker. */
+static void _set_distort_signal(dt_iop_module_t *self);
+static void _unset_distort_signal(dt_iop_module_t *self);
 
 const char *name()
 {
@@ -637,44 +639,6 @@ static void invalidate_luminance_cache(dt_iop_module_t *const self)
   g->ui_preview_hash = 0;
   dt_iop_gui_leave_critical_section(self);
   dt_iop_refresh_preview(self);
-}
-
-
-static int sanity_check(dt_iop_module_t *self)
-{
-  // If tone equalizer is put after flip/orientation module, the pixel
-  // buffer will be in landscape orientation even for pictures
-  // displayed in portrait orientation so the interactive editing will
-  // fail. Disable the module and issue a warning then.
-
-  const double position_self = self->iop_order;
-  const double position_min =
-    dt_ioppr_get_iop_order(self->dev->iop_order_list, "flip", 0);
-
-  if(position_self < position_min && self->enabled)
-  {
-    dt_control_log(_("tone equalizer needs to be after distortion modules"
-                     " in the pipeline – disabled"));
-    dt_print(DT_DEBUG_ALWAYS,
-            "tone equalizer needs to be after distortion modules"
-            " in the pipeline – disabled\n");
-    self->enabled = FALSE;
-    dt_dev_add_history_item(darktable.develop, self, FALSE);
-
-    if(self->dev->gui_attached)
-    {
-      // Repaint the on/off icon
-      if(self->off)
-      {
-        ++darktable.gui->reset;
-        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->off), self->enabled);
-        --darktable.gui->reset;
-      }
-    }
-    return 0;
-  }
-
-  return 1;
 }
 
 // gaussian-ish kernel - sum is == 1.0f so we don't care much about actual coeffs
@@ -1051,7 +1015,6 @@ void toneeq_process(struct dt_iop_module_t *self,
                     const dt_iop_roi_t *const roi_in,
                     const dt_iop_roi_t *const roi_out)
 {
-  printf("TEQ PROCESS\n");
   const dt_iop_toneequalizer_data_t *const d =
     (const dt_iop_toneequalizer_data_t *const)piece->data;
   dt_iop_toneequalizer_gui_data_t *const g =
@@ -1076,14 +1039,6 @@ void toneeq_process(struct dt_iop_module_t *self,
   if(roi_in->width < roi_out->width || roi_in->height < roi_out->height)
     return; // input should be at least as large as output
   if(piece->colors != 4) return;  // we need RGB signal
-
-  if(!sanity_check(self))
-  {
-    // if module just got disabled by sanity checks, due to pipe
-    // position, just pass input through
-    dt_iop_image_copy_by_size(out, in, width, height, ch);
-    return;
-  }
 
   // Init the luminance masks buffers
   gboolean cached = FALSE;
@@ -2064,8 +2019,7 @@ static void switch_cursors(struct dt_iop_module_t *self)
   GtkWidget *widget = dt_ui_main_window(darktable.gui->ui);
 
   // if we are editing masks or using colour-pickers, do not display controls
-  if(!sanity_check(self)
-     || in_mask_editing(self)
+  if(in_mask_editing(self)
      || dt_iop_canvas_not_sensitive(self->dev))
   {
     // display default cursor
@@ -2143,20 +2097,10 @@ int mouse_moved(dt_iop_module_t *self,
                 const float zoom_scale)
 {
   // Whenever the mouse moves over the picture preview, store its
-  // coordinates in the GUI struct for later use. This works only if
-  // dev->preview_pipe perfectly overlaps with the UI preview meaning
-  // all distortions, cropping, rotations etc. are applied before this
-  // module in the pipe.
-
-  _set_crop_signal(self);
+  // coordinates in the GUI struct for later use.
 
   const dt_develop_t *dev = self->dev;
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
-
-  dt_iop_gui_enter_critical_section(self);
-  const int fail = !sanity_check(self);
-  dt_iop_gui_leave_critical_section(self);
-  if(fail) return 0;
 
   if(g == NULL) return 0;
 
@@ -2188,6 +2132,7 @@ int mouse_moved(dt_iop_module_t *self,
     g->cursor_exposure = log2f(_luminance_from_module_buffer(self));
 
   switch_cursors(self);
+
   return 1;
 }
 
@@ -2285,7 +2230,6 @@ int scrolled(struct dt_iop_module_t *self,
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
   dt_iop_toneequalizer_params_t *p = (dt_iop_toneequalizer_params_t *)self->params;
 
-  if(!sanity_check(self)) return 0;
   if(darktable.gui->reset) return 1;
   if(g == NULL) return 0;
   if(!g->has_focus) return 0;
@@ -2465,7 +2409,6 @@ void gui_post_expose(dt_iop_module_t *self,
   const int fail = (!g->cursor_valid
                     || !g->interpolation_valid
                     || dev->full.pipe->processing
-                    || !sanity_check(self)
                     || !g->has_focus);
 
   dt_iop_gui_leave_critical_section(self);
@@ -2473,7 +2416,8 @@ void gui_post_expose(dt_iop_module_t *self,
   if(fail) return;
 
   if(!g->graph_valid)
-    if(!_init_drawing(self, self->widget, g)) return;
+    if(!_init_drawing(self, self->widget, g))
+      return;
 
   // re-read the exposure in case it has changed
   if(g->luminance_valid && self->enabled)
@@ -2609,54 +2553,45 @@ void gui_post_expose(dt_iop_module_t *self,
   }
 }
 
-static void _develop_crop_callback(gpointer instance,
-                                   gpointer user_data)
+static void _develop_distort_callback(gpointer instance,
+                                      gpointer user_data)
 {
   dt_iop_module_t *self = (dt_iop_module_t *)user_data;
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
   if(g == NULL) return;
 
-  _unset_crop_signal(self);
+  /* disable the distort signal now to avoid recursive call on this signal as we are
+     about to reprocess the preview pipe which has some module doing distortion. */
 
-  printf("redraw callback...\n");
-  // g->luminance_valid = FALSE;
-  // invalidate_luminance_cache(self);
-  //  dt_dev_invalidate_all(darktable.develop);
+  _unset_distort_signal(self);
 
-  //  dt_dev_pixelpipe_cache_flush(darktable.develop->preview_pipe);
-  //  self->dev->preview_pipe->backbuf_hash = 0;
-
-  //  dt_control_queue_redraw_center();
+  /* we do reprocess the preview to get a new internal image buffer with the proper
+     image geometry. */
   dt_dev_reprocess_preview(darktable.develop);
-  // dt_dev_reprocess_all(darktable.develop);
-
-//  dt_dev_add_history_item(darktable.develop, self, FALSE);
 }
 
-static void _set_crop_signal(dt_iop_module_t *self)
+static void _set_distort_signal(dt_iop_module_t *self)
 {
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
-  if(!g->crop_signal_actif)
+  if(!g->distort_signal_actif)
   {
-    printf("SIGNAL crop set\n");
     DT_DEBUG_CONTROL_SIGNAL_CONNECT
       (darktable.signals,
        DT_SIGNAL_DEVELOP_DISTORT,
-       G_CALLBACK(_develop_crop_callback), self);
-    g->crop_signal_actif = TRUE;
+       G_CALLBACK(_develop_distort_callback), self);
+    g->distort_signal_actif = TRUE;
   }
 }
 
-static void _unset_crop_signal(dt_iop_module_t *self)
+static void _unset_distort_signal(dt_iop_module_t *self)
 {
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
-  if(g->crop_signal_actif)
+  if(g->distort_signal_actif)
   {
-    printf("SIGNAL crop unset\n");
     DT_DEBUG_CONTROL_SIGNAL_DISCONNECT
       (darktable.signals,
-       G_CALLBACK(_develop_crop_callback), self);
-    g->crop_signal_actif = FALSE;
+       G_CALLBACK(_develop_distort_callback), self);
+    g->distort_signal_actif = FALSE;
   }
 }
 
@@ -2677,7 +2612,8 @@ void gui_focus(struct dt_iop_module_t *self, gboolean in)
       dt_dev_reprocess_center(self->dev);
     dt_collection_hint_message(darktable.collection);
 
-    _unset_crop_signal(self);
+    // no need for the distort signal anymore
+    _unset_distort_signal(self);
   }
   else
   {
@@ -2685,7 +2621,8 @@ void gui_focus(struct dt_iop_module_t *self, gboolean in)
                               _("scroll over image to change tone exposure\n"
                                 "shift+scroll for large steps; "
                                 "ctrl+scroll for small steps"));
-    _set_crop_signal(self);
+    // listen to distort change again
+    _set_distort_signal(self);
   }
 }
 
@@ -3381,6 +3318,13 @@ static void _develop_preview_pipe_finished_callback(gpointer instance,
   dt_iop_module_t *self = (dt_iop_module_t *)user_data;
   dt_iop_toneequalizer_gui_data_t *g = (dt_iop_toneequalizer_gui_data_t *)self->gui_data;
   if(g == NULL) return;
+
+  // now that the preview pipe is termintated, set back the distort signal to catch
+  // any new changes from a module doing distortion. this signal has been disconnected
+  // at the time the DT_SIGNAL_DEVELOP_DISTORT has been handled (see ) and a full
+  // reprocess of the preview has been scheduled.
+  _set_distort_signal(self);
+
   switch_cursors(self);
   gtk_widget_queue_draw(GTK_WIDGET(g->area));
   gtk_widget_queue_draw(GTK_WIDGET(g->bar));
@@ -3664,6 +3608,7 @@ void gui_cleanup(struct dt_iop_module_t *self)
   DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
                                      G_CALLBACK(_develop_preview_pipe_finished_callback),
                                      self);
+
 
   dt_free_align(g->thumb_preview_buf);
   dt_free_align(g->full_preview_buf);
