@@ -1263,8 +1263,6 @@ static gboolean _event_button_press(GtkWidget *widget,
   dt_set_backthumb_time(0.0);
 
   dt_thumbtable_t *table = (dt_thumbtable_t *)user_data;
-  const dt_view_manager_t *vm = darktable.view_manager;
-  dt_view_t *view = vm->current_view;
   const dt_imgid_t id = dt_control_get_mouse_over_id();
 
   if(dt_is_valid_imgid(id)
@@ -1274,16 +1272,6 @@ static gboolean _event_button_press(GtkWidget *widget,
      && event->type == GDK_2BUTTON_PRESS)
   {
     dt_view_manager_switch(darktable.view_manager, "darkroom");
-  }
-  else if(dt_is_valid_imgid(id)
-          && event->button == 1
-          && table->mode == DT_THUMBTABLE_MODE_FILMSTRIP
-          && event->type == GDK_BUTTON_PRESS
-          && strcmp(view->module_name, "map")
-          && dt_modifier_is(event->state, 0))
-  {
-    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals,
-                                  DT_SIGNAL_VIEWMANAGER_THUMBTABLE_ACTIVATE, id);
   }
 
   if(event->button == 1 && event->type == GDK_BUTTON_PRESS)
@@ -1374,6 +1362,16 @@ static gboolean _event_button_release(GtkWidget *widget,
                                     DT_SIGNAL_VIEWMANAGER_THUMBTABLE_ACTIVATE, id);
       return TRUE;
     }
+    else if(dt_is_valid_imgid(id)
+            && event->button == 1
+            && table->mode == DT_THUMBTABLE_MODE_FILMSTRIP
+            && event->type == GDK_BUTTON_RELEASE
+            && strcmp(view->module_name, "map")
+            && dt_modifier_is(event->state, 0))
+      {
+        DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals,
+                                      DT_SIGNAL_VIEWMANAGER_THUMBTABLE_ACTIVATE, id);
+      }
   }
 
   if(table->mode != DT_THUMBTABLE_MODE_ZOOM)
