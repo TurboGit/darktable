@@ -247,6 +247,8 @@ static void _setup_overlay(dt_iop_module_t *self)
   dt_iop_overlay_gui_data_t *g = (dt_iop_overlay_gui_data_t *)self->gui_data;
   dt_iop_overlay_global_data_t *gd = (dt_iop_overlay_global_data_t *)self->global_data;
 
+  if(!p) return;
+
   const dt_imgid_t imgid = p->imgid;
 
   if(!dt_is_valid_imgid(imgid))
@@ -282,8 +284,13 @@ static void _setup_overlay(dt_iop_module_t *self)
     const dt_develop_t *dev = self->dev;
     const float iscale = p->scale / 100.0f;
 
-    const size_t width  = CLAMP(dev->preview_pipe->iwidth / iscale, 2*1024, 8*1024);
-    const size_t height = CLAMP(dev->preview_pipe->iheight / iscale, 2*1024, 8*1024);
+    const size_t width  = dev->preview_pipe
+      ? CLAMP(dev->preview_pipe->iwidth / iscale, 2*1024, 8*1024)
+      : p->buf_width;
+
+    const size_t height = dev->preview_pipe
+      ? CLAMP(dev->preview_pipe->iheight / iscale, 2*1024, 8*1024)
+      : p->buf_height;
 
     gtk_widget_set_tooltip_text(GTK_WIDGET(g->area), "");
 
@@ -306,8 +313,8 @@ static void _setup_overlay(dt_iop_module_t *self)
     p->buf_width  = bw;
     p->buf_height = bh;
     gd->thumb_timeout_id = 0;
-    p->pwidth = dev->preview_pipe->iwidth;
-    p->pheight = dev->preview_pipe->iheight;
+    p->pwidth = width;
+    p->pheight = height;
 
     dt_free_align(old_buf);
 
@@ -346,10 +353,10 @@ void process(struct dt_iop_module_t *self,
 //  dt_iop_overlay_buf_t *b = &gd->buf[data->index];
 
   // is overlay image ready
-  if(self->dev->preview_pipe
-     && (!dt_is_valid_imgid(data->imgid)
-         || (!data->buf
-             || (data->pwidth != self->dev->preview_pipe->iwidth
+  if(!dt_is_valid_imgid(data->imgid)
+     || (!data->buf
+         || (self->dev->preview_pipe
+             && (data->pwidth != self->dev->preview_pipe->iwidth
                  || data->pheight != self->dev->preview_pipe->iheight))))
   {
     dt_iop_image_copy_by_size(ovoid, ivoid, roi_out->width, roi_out->height, ch);
