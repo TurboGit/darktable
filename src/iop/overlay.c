@@ -229,6 +229,14 @@ static GList *_get_disabled_modules(const int imgid, const int multi_priority)
   return result;
 }
 
+static void _clear_cache_entry(dt_iop_module_t *self, const int index)
+{
+  dt_iop_overlay_global_data_t *gd = (dt_iop_overlay_global_data_t *)self->global_data;
+
+  dt_free_align(gd->cache[index]);
+  gd->cache[index] = NULL;
+}
+
 static void _module_remove_callback(gpointer instance,
                                     dt_iop_module_t *self,
                                     gpointer user_data)
@@ -239,17 +247,17 @@ static void _module_remove_callback(gpointer instance,
     dt_overlay_remove(self->dev->image_storage.id, p->imgid);
 }
 
-static void _setup_overlay(dt_iop_module_t *self)
+static void _setup_overlay(dt_iop_module_t *self,
+                           dt_dev_pixelpipe_iop_t *piece,
+                           uint8_t **pbuf)
 {
   dt_iop_overlay_params_t *p = (dt_iop_overlay_params_t *)self->params;
   dt_iop_overlay_gui_data_t *g = (dt_iop_overlay_gui_data_t *)self->gui_data;
-  dt_iop_overlay_global_data_t *gd = (dt_iop_overlay_global_data_t *)self->global_data;
+  dt_iop_overlay_data_t *data = (dt_iop_overlay_data_t *)piece->data;
 
-  if(!p) return;
+  const dt_imgid_t imgid = data->imgid;
 
-  const dt_imgid_t imgid = p->imgid;
-
-  if(!dt_is_valid_imgid(imgid))
+  if(!p || !dt_is_valid_imgid(imgid))
   {
     return;
   }
@@ -260,7 +268,7 @@ static void _setup_overlay(dt_iop_module_t *self)
   // imported again. Check if we can find
   if(!image_exists)
   {
-    const dt_imgid_t new_imgid = dt_image_get_id_full_path(p->filename);
+    const dt_imgid_t new_imgid = dt_image_get_id_full_path(data->filename);
     if(dt_is_valid_imgid(new_imgid))
     {
       image_exists = TRUE;
@@ -300,13 +308,13 @@ static void _setup_overlay(dt_iop_module_t *self)
                  NULL, NULL,
                  -1, disabled_modules);
 
-    uint8_t *old_buf = gd->cache[index];
+    uint8_t *old_buf = *pbuf;
 
     p->hash       = (int64_t)buf;
     p->buf_width  = bw;
     p->buf_height = bh;
 
-    gd->cache[index] = buf;
+    *pbuf = buf;
     dt_free_align(old_buf);
   }
   else
@@ -331,13 +339,21 @@ void process(struct dt_iop_module_t *self,
   const float angle = (M_PI / 180) * (-data->rotate);
   const int index   = self->multi_priority;
 
-  if(!gd->cache[index])
+  uint8_t *cbuf = NULL;
+
+  // if called from darkroom so edited image the is one in
+  // darktable->develop then we use the cache, otherwise we just use a
+  // scratch buffer local to process for rendering.
+  uint8_t **pbuf = self->dev->image_storage.id == darktable.develop->image_storage.id
+    ? &gd->cache[index]
+    : &cbuf;
+
+  if(!*pbuf)
   {
     // need the overlay, create the buffer now
-    printf("PROCESS overlay\n");
-    _setup_overlay(self);
+    _setup_overlay(self, piece, pbuf);
 
-    if(!gd->cache[index])
+    if(!*pbuf)
     {
       // image does not exist / not rendered -> copy in to out
       dt_iop_image_copy_by_size(ovoid, ivoid, roi_out->width, roi_out->height, ch);
@@ -387,7 +403,7 @@ void process(struct dt_iop_module_t *self,
 
   const size_t size_buf = bw * bh * sizeof(uint32_t);
   uint8_t *buf = (uint8_t *)dt_alloc_align(64, size_buf);
-  memcpy(buf, (uint8_t *)gd->cache[index], size_buf);
+  memcpy(buf, *pbuf, size_buf);
 
   // load overlay image into surface 2
   surface_two = dt_view_create_surface(buf, bw, bh);
@@ -833,6 +849,10 @@ void gui_update(struct dt_iop_module_t *self)
     gtk_widget_set_visible(GTK_WIDGET(g->scale_img), FALSE);
     gtk_widget_set_visible(GTK_WIDGET(g->scale_svg), FALSE);
   }
+
+  // enterring from darkroom, clear cache
+  for(int k=0; k<MAX_OVERLAY; k++)
+    _clear_cache_entry(self, k);
 }
 
 void gui_reset(dt_iop_module_t *self)
@@ -881,14 +901,6 @@ void cleanup_global(dt_iop_module_so_t *module)
 {
   free(module->data);
   module->data = NULL;
-}
-
-static void _clear_cache_entry(dt_iop_module_t *self, const int index)
-{
-  dt_iop_overlay_global_data_t *gd = (dt_iop_overlay_global_data_t *)self->global_data;
-
-  dt_free_align(gd->cache[index]);
-  gd->cache[index] = NULL;
 }
 
 static void _signal_image_changed(gpointer instance, gpointer user_data)
