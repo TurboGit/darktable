@@ -94,10 +94,7 @@ typedef struct dt_iop_overlay_params_t
   char filename[1024]; // $DEFAULT: 0 $DESCRIPTION: "full overlay's filename"
   size_t buf_width; // $DEFAULT: 0 $DESCRIPTION: "no image"
   size_t buf_height; // $DEFAULT: 0 $DESCRIPTION: "no image"
-//  size_t pwidth; // $DEFAULT: 0 $DESCRIPTION: "no image"
-//  size_t pheight; // $DEFAULT: 0 $DESCRIPTION: "no image"
   int64_t hash; // $DEFAULT: 0 $DESCRIPTION: "NULL pointer"
-//  guint thumb_timeout_id; // $DEFAULT: 0 $DESCRIPTION: "no image"
 } dt_iop_overlay_params_t;
 
 typedef struct dt_iop_overlay_data_t
@@ -289,7 +286,7 @@ static void _setup_overlay(dt_iop_module_t *self,
 
   if(image_exists)
   {
-    const dt_develop_t *dev = self->dev;
+    dt_develop_t *dev = self->dev;
 
     const size_t width  = dev->image_storage.width;
     const size_t height = dev->image_storage.width;
@@ -311,9 +308,11 @@ static void _setup_overlay(dt_iop_module_t *self,
 
     uint8_t *old_buf = *pbuf;
 
-    p->hash       = (int64_t)buf;
-    p->buf_width  = bw;
-    p->buf_height = bh;
+    p->hash          = (int64_t)buf;
+    p->buf_width     = bw;
+    p->buf_height    = bh;
+    data->buf_width  = bw;
+    data->buf_height = bh;
 
     *pbuf = buf;
     dt_free_align(old_buf);
@@ -940,12 +939,14 @@ static void _drag_and_drop_received(GtkWidget *widget,
 
       // and record the new one
       p->imgid = imgs[0];
+      p->hash = 0;
       _clear_cache_entry(self, index);
 
       dt_overlay_record(self->dev->image_storage.id, p->imgid);
 
       gboolean from_cache = FALSE;
       dt_image_full_path(p->imgid, p->filename, sizeof(p->filename), &from_cache);
+
       dt_dev_add_history_item(darktable.develop, self, TRUE);
 
       dt_control_queue_redraw_center();
