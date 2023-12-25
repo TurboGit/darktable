@@ -117,18 +117,13 @@ typedef struct dt_iop_overlay_data_t
   size_t buf_width;
   size_t buf_height;
   uint8_t *buf;
-//  size_t pwidth;
-//  size_t pheight;
 } dt_iop_overlay_data_t;
 
-#define MAX_OVERLAY 20
+#define MAX_OVERLAY 50
 
 typedef struct dt_iop_overlay_global_data_t
 {
   uint8_t *cache[MAX_OVERLAY];
-  guint thumb_timeout_id;
-//  size_t iwidth;
-//  size_t iheight;
 } dt_iop_overlay_global_data_t;
 
 typedef struct dt_iop_overlay_gui_data_t
@@ -145,19 +140,17 @@ typedef struct dt_iop_overlay_gui_data_t
 
 /* Notes about the implementation.
 
-   This tricky part is that it is not possible to render the overlay
-   image from process. This is because the pipe has locks and it is
-   not possible at this time to initiate a new pipe to render the
-   overlay (see _setup_overlay).
+   The creation of the overlay image use a standard pipe run. This is
+   not fast so a cache is used.
 
    - The cached overlay buffers are stored into the global data. One slot is
-     allocated for each instances.
+     allocated for each instances (index is the multi_priority).
 
-   - In parameters we have the inded of the cache entry in global data.
+   - In parameters we have the width x height of the cached image buffer.
 
    - A hash is added in parameter to ensure the parameters are changed
      when the cache is changed too and so ensure that the proper
-     buffer is displayed. This hash contains values not part of parameters.
+     buffer is displayed. This hash is the buffer pointer casted as uint64_t.
  */
 
 const char *name()
@@ -287,11 +280,11 @@ static void _setup_overlay(dt_iop_module_t *self)
   if(image_exists)
   {
     const dt_develop_t *dev = self->dev;
-//    const float iscale = p->scale / 100.0f;
 
     const size_t width  = dev->image_storage.width;
     const size_t height = dev->image_storage.width;
     const int index     = self->multi_priority;
+
     if(g)
       gtk_widget_set_tooltip_text(GTK_WIDGET(g->area), "");
 
@@ -312,8 +305,6 @@ static void _setup_overlay(dt_iop_module_t *self)
     p->hash       = (int64_t)buf;
     p->buf_width  = bw;
     p->buf_height = bh;
-//    p->pwidth     = width;
-//    p->pheight    = height;
 
     gd->cache[index] = buf;
     dt_free_align(old_buf);
@@ -325,18 +316,6 @@ static void _setup_overlay(dt_iop_module_t *self)
     dt_control_log(_("image %d does not exists"), imgid);
   }
 }
-
-#if 0
-static gboolean _build_overlay(gpointer user_data)
-{
-  dt_iop_module_t *self = (dt_iop_module_t *)user_data;
-
-  printf("BUILD OVERLAY....\n");
-  _setup_overlay(self);
-  dt_control_queue_redraw_center();
-  return FALSE;
-}
-#endif
 
 void process(struct dt_iop_module_t *self,
              dt_dev_pixelpipe_iop_t *piece,
@@ -354,30 +333,11 @@ void process(struct dt_iop_module_t *self,
   const float angle = (M_PI / 180) * (-data->rotate);
   const int index   = self->multi_priority;
 
-//  dt_iop_overlay_buf_t *b = &gd->buf[data->index];
-
-  // is overlay image ready
-//  if(!dt_is_valid_imgid(data->imgid)
-//     || (!data->buf))
   if(!gd->cache[index])
   {
-//    dt_iop_image_copy_by_size(ovoid, ivoid, roi_out->width, roi_out->height, ch);
-
+    // need the overlay, create the buffer now
     printf("PROCESS overlay\n");
-    // let register a build of the overlay buffer if image id valid
-//    gd->index = data->index;
-//    b->imgid = data->imgid;
-//    b->scale = data->scale;
-//    b->pwidth = self->dev->preview_pipe->iwidth;
-//    b->pheight = self->dev->preview_pipe->iheight;
-//    g_strlcpy(b->filename, data->filename, sizeof(data->filename));
-
     _setup_overlay(self);
-
-//    if(dt_is_valid_imgid(data->imgid))
-//      gd->thumb_timeout_id = g_timeout_add(10, _build_overlay, self);
-
-//    return;
   }
 
   /* setup stride for performance */
@@ -829,8 +789,6 @@ void commit_params(struct dt_iop_module_t *self,
   d->buf        = gd->cache[index];
   d->buf_width  = p->buf_width;
   d->buf_height = p->buf_height;
-//  d->pwidth     = p->pwidth;
-//  d->pheight    = p->pheight;
   g_strlcpy(d->filename, p->filename, sizeof(p->filename));
 }
 
@@ -870,34 +828,25 @@ void gui_update(struct dt_iop_module_t *self)
     gtk_widget_set_visible(GTK_WIDGET(g->scale_img), FALSE);
     gtk_widget_set_visible(GTK_WIDGET(g->scale_svg), FALSE);
   }
-
-  if(dt_is_valid_imgid(p->imgid))
-  {
-//    p->buf = 0;
-    dt_control_queue_redraw_center();
-  }
 }
 
 void reload_defaults(dt_iop_module_t *self)
 {
   dt_iop_overlay_params_t *p = (dt_iop_overlay_params_t *)self->params;
-//  dt_iop_overlay_global_data_t *gd = (dt_iop_overlay_global_data_t *)self->global_data;
 
   if(dt_is_valid_imgid(p->imgid))
     dt_overlay_remove(self->dev->image_storage.id, p->imgid);
 
-//  printf("WxH: %d x %d\n",
-
-//  gd->iwidth = self->dev->image_storage.width;
-//  gd->iheight = self->dev->image_storage.height;
+  gtk_widget_queue_draw(GTK_WIDGET(g->area));
 }
 
 void gui_reset(dt_iop_module_t *self)
 {
   dt_iop_overlay_gui_data_t *g = (dt_iop_overlay_gui_data_t *)self->gui_data;
-//  dt_iop_overlay_params_t *p = (dt_iop_overlay_params_t *)self->params;
 
-//  p->buf = 0;
+  if(dt_is_valid_imgid(p->imgid))
+    dt_overlay_remove(self->dev->image_storage.id, p->imgid);
+
   gtk_widget_queue_draw(GTK_WIDGET(g->area));
 }
 
@@ -936,6 +885,18 @@ void cleanup_global(dt_iop_module_so_t *module)
 {
   free(module->data);
   module->data = NULL;
+}
+
+static void _signal_image_changed(gpointer instance, gpointer user_data)
+{
+  dt_iop_module_t *self = (dt_iop_module_t *)user_data;
+  dt_iop_overlay_global_data_t *gd = (dt_iop_overlay_global_data_t *)self->global_data;
+
+  for(int k=0; k<MAX_OVERLAY; k++)
+  {
+    dt_free_align(gd->cache[k]);
+    gd->cache[k] = NULL;
+  }
 }
 
 static void _drag_and_drop_received(GtkWidget *widget,
@@ -1053,7 +1014,8 @@ void gui_init(struct dt_iop_module_t *self)
 
   // Create the 3x3 gtk table toggle button table...
   GtkWidget *bat = gtk_grid_new();
-  GtkWidget *label = dtgtk_reset_label_new(_("alignment"), self, &p->alignment, sizeof(p->alignment));
+  GtkWidget *label = dtgtk_reset_label_new(_("alignment"),
+                                           self, &p->alignment, sizeof(p->alignment));
   gtk_grid_attach(GTK_GRID(bat), label, 0, 0, 1, 3);
   gtk_widget_set_hexpand(label, TRUE);
   gtk_grid_set_row_spacing(GTK_GRID(bat), DT_PIXEL_APPLY_DPI(3));
@@ -1082,6 +1044,9 @@ void gui_init(struct dt_iop_module_t *self)
 
   DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals, DT_SIGNAL_DEVELOP_MODULE_REMOVE,
                                   G_CALLBACK(_module_remove_callback), self);
+
+  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals, DT_SIGNAL_DEVELOP_IMAGE_CHANGED,
+                                  G_CALLBACK(_signal_image_changed), self);
 }
 
 void gui_cleanup(struct dt_iop_module_t *self)
@@ -1090,6 +1055,9 @@ void gui_cleanup(struct dt_iop_module_t *self)
 
   DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
                                      G_CALLBACK(_module_remove_callback), self);
+
+  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
+                                     G_CALLBACK(_signal_image_changed), self);
 }
 
 // clang-format off
