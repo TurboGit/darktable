@@ -361,7 +361,7 @@ void process(struct dt_iop_module_t *self,
 //     || (!data->buf))
   if(!gd->cache[index])
   {
-    dt_iop_image_copy_by_size(ovoid, ivoid, roi_out->width, roi_out->height, ch);
+//    dt_iop_image_copy_by_size(ovoid, ivoid, roi_out->width, roi_out->height, ch);
 
     printf("PROCESS overlay\n");
     // let register a build of the overlay buffer if image id valid
@@ -377,7 +377,7 @@ void process(struct dt_iop_module_t *self,
 //    if(dt_is_valid_imgid(data->imgid))
 //      gd->thumb_timeout_id = g_timeout_add(10, _build_overlay, self);
 
-    return;
+//    return;
   }
 
   /* setup stride for performance */
@@ -422,7 +422,7 @@ void process(struct dt_iop_module_t *self,
 
   const size_t size_buf = bw * bh * sizeof(uint32_t);
   uint8_t *buf = (uint8_t *)dt_alloc_align(64, size_buf);
-  memcpy(buf, (uint8_t *)data->buf, size_buf);
+  memcpy(buf, (uint8_t *)gd->cache[index], size_buf);
 
   // load overlay image into surface 2
   surface_two = dt_view_create_surface(buf, bw, bh);
