@@ -300,7 +300,7 @@ static void _setup_overlay(dt_iop_module_t *self)
                  NULL, NULL,
                  -1, disabled_modules);
 
-    uint8_t *old_buf = (uint8_t *)gd->cache[index];
+    uint8_t *old_buf = gd->cache[index];
 
     p->hash       = (int64_t)buf;
     p->buf_width  = bw;
@@ -308,8 +308,6 @@ static void _setup_overlay(dt_iop_module_t *self)
 
     gd->cache[index] = buf;
     dt_free_align(old_buf);
-
-    gd->thumb_timeout_id = 0;
   }
   else
   {
@@ -338,6 +336,13 @@ void process(struct dt_iop_module_t *self,
     // need the overlay, create the buffer now
     printf("PROCESS overlay\n");
     _setup_overlay(self);
+
+    if(!gd->cache[index])
+    {
+      // image does not exist / not rendered -> copy in to out
+      dt_iop_image_copy_by_size(ovoid, ivoid, roi_out->width, roi_out->height, ch);
+      return;
+    }
   }
 
   /* setup stride for performance */
@@ -830,19 +835,10 @@ void gui_update(struct dt_iop_module_t *self)
   }
 }
 
-void reload_defaults(dt_iop_module_t *self)
-{
-  dt_iop_overlay_params_t *p = (dt_iop_overlay_params_t *)self->params;
-
-  if(dt_is_valid_imgid(p->imgid))
-    dt_overlay_remove(self->dev->image_storage.id, p->imgid);
-
-  gtk_widget_queue_draw(GTK_WIDGET(g->area));
-}
-
 void gui_reset(dt_iop_module_t *self)
 {
   dt_iop_overlay_gui_data_t *g = (dt_iop_overlay_gui_data_t *)self->gui_data;
+  dt_iop_overlay_params_t *p = (dt_iop_overlay_params_t *)self->params;
 
   if(dt_is_valid_imgid(p->imgid))
     dt_overlay_remove(self->dev->image_storage.id, p->imgid);
@@ -887,16 +883,20 @@ void cleanup_global(dt_iop_module_so_t *module)
   module->data = NULL;
 }
 
+static void _clear_cache_entry(dt_iop_module_t *self, const int index)
+{
+  dt_iop_overlay_global_data_t *gd = (dt_iop_overlay_global_data_t *)self->global_data;
+
+  dt_free_align(gd->cache[index]);
+  gd->cache[index] = NULL;
+}
+
 static void _signal_image_changed(gpointer instance, gpointer user_data)
 {
   dt_iop_module_t *self = (dt_iop_module_t *)user_data;
-  dt_iop_overlay_global_data_t *gd = (dt_iop_overlay_global_data_t *)self->global_data;
 
   for(int k=0; k<MAX_OVERLAY; k++)
-  {
-    dt_free_align(gd->cache[k]);
-    gd->cache[k] = NULL;
-  }
+    _clear_cache_entry(self, k);
 }
 
 static void _drag_and_drop_received(GtkWidget *widget,
@@ -918,6 +918,7 @@ static void _drag_and_drop_received(GtkWidget *widget,
     const int imgs_nb = gtk_selection_data_get_length(selection_data) / sizeof(dt_imgid_t);
     if(imgs_nb)
     {
+      const int index  = self->multi_priority;
       dt_imgid_t *imgs = (dt_imgid_t *)gtk_selection_data_get_data(selection_data);
 
       // remove previous overly if valid
@@ -926,6 +927,7 @@ static void _drag_and_drop_received(GtkWidget *widget,
 
       // and record the new one
       p->imgid = imgs[0];
+      _clear_cache_entry(self, index);
 
       dt_overlay_record(self->dev->image_storage.id, p->imgid);
 
