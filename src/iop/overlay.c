@@ -184,9 +184,11 @@ dt_iop_colorspace_type_t default_colorspace(dt_iop_module_t *self,
   return IOP_CS_RGB;
 }
 
-static GList *_get_disabled_modules(const int imgid, const int multi_priority)
+static GList *_get_disabled_modules(const dt_iop_module_t *self)
 {
-  dt_develop_t *dev = darktable.develop;
+  const dt_develop_t *dev = self->dev;
+  const int imgid = dev->image_storage.id;
+  const int multi_priority = self->multi_priority;
 
   // we want the list of all modules in imgid that are after the current
   // overlay module iop-order. And also colorin and colorout. Note that we
@@ -291,7 +293,6 @@ static void _setup_overlay(dt_iop_module_t *self,
 
     const size_t width  = dev->image_storage.width;
     const size_t height = dev->image_storage.width;
-    const int index     = self->multi_priority;
 
     if(g)
       gtk_widget_set_tooltip_text(GTK_WIDGET(g->area), "");
@@ -300,7 +301,7 @@ static void _setup_overlay(dt_iop_module_t *self,
     size_t bw;
     size_t bh;
 
-    GList *disabled_modules = _get_disabled_modules(dev->image_storage.id, index);
+    GList *disabled_modules = _get_disabled_modules(self);
 
     dt_dev_image(imgid, width, height,
                  -1,
