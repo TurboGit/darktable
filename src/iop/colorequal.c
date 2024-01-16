@@ -112,7 +112,7 @@ typedef struct dt_iop_colorequal_params_t
   float chroma_size;        // $MIN: 1.0 $MAX: 10. $DEFAULT: 3.0 $DESCRIPTION: "analysis radius"
   float chroma_feathering;  // $MIN: 1.0 $MAX: 10. $DEFAULT: 5.0 $DESCRIPTION: "analysis feathering"
 
-  float param_size;        // $MIN: 3 $MAX: 128 $DEFAULT: 50 $DESCRIPTION: "effect radius"
+  float param_size;        // $MIN: 3 $MAX: 128 $DEFAULT: 10 $DESCRIPTION: "effect radius"
   float param_feathering;  // $MIN: 1.0 $MAX: 10. $DEFAULT: 6.0 $DESCRIPTION: "effect feathering"
 
   gboolean use_filter; // $DEFAULT: TRUE $DESCRIPTION: "use guided filter"
