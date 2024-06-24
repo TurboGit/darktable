@@ -220,6 +220,7 @@ static gboolean _large_patch_toggle(GtkWidget *widget,
 static void _picker_button_toggled(GtkToggleButton *button,
                                    dt_lib_colorpicker_t *data)
 {
+  //  If picker is active allow adding a sample
   const gboolean is_active = gtk_toggle_button_get_active(button);
   gtk_widget_set_sensitive(GTK_WIDGET(data->add_sample_button), is_active);
 
@@ -488,7 +489,7 @@ static gboolean _live_sample_button(GtkWidget *widget,
     gtk_widget_set_sensitive(GTK_WIDGET(data->add_sample_button), TRUE);
 
     // no active picker, too much iffy GTK work to activate a default
-    if(!picker) return FALSE;
+    // if(!picker) return FALSE;
 
     if(sample->size == DT_LIB_COLORPICKER_SIZE_POINT)
       _set_sample_point(self, sample->point);
@@ -497,10 +498,47 @@ static gboolean _live_sample_button(GtkWidget *widget,
     else
       return FALSE;
 
-    //  Record the current sample to be the modified (copied) one
-    data->target_sample = sample;
+    //  We leaving the color-picker active mode and we have a target_sample
+    //  recorded. In this case we want the target sample to be replaced by
+    //  the current primay_sample.
+    const gboolean is_active =
+//      dt_bauhaus_widget_get_quad_active(data->picker_button);
+    gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(data->picker_button));
 
-    if(picker->module)
+    printf("picker is active %d\n", is_active);
+
+    if(0 && is_active && data->target_sample)
+    {
+      printf("===================> copy back sample\n");
+      //  Copy only the position & style for sample
+      memcpy(&data->target_sample->point,
+             &data->primary_sample.point,
+             sizeof(data->primary_sample.point));
+      memcpy(&data->target_sample->box,
+             &data->primary_sample.box,
+             sizeof(data->primary_sample.box));
+      //  Size cannot be changed at this point, but in case this is done
+      //  in the future.
+      data->target_sample->size = data->primary_sample.size;
+
+      data->target_sample = NULL;
+
+      //  And now redisplay the new samples areas
+      gtk_widget_queue_draw(data->samples_container);
+    }
+    else if(!is_active)
+    {
+      printf("===================> record target sample\n");
+      data->target_sample = sample;
+      darktable.lib->proxy.colorpicker.module = self;
+    }
+
+    dt_bauhaus_widget_set_quad_active(data->picker_button, !is_active);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->picker_button), !is_active);
+
+    //  Record the current sample to be the modified (copied) one
+
+    if(picker && picker->module)
     {
       picker->module->dev->preview_pipe->status = DT_DEV_PIXELPIPE_DIRTY;
     }
