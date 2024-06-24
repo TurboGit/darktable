@@ -224,11 +224,13 @@ static void _picker_button_toggled(GtkToggleButton *button,
   const gboolean is_active = gtk_toggle_button_get_active(button);
   gtk_widget_set_sensitive(GTK_WIDGET(data->add_sample_button), is_active);
 
+  printf("toggled... is button active %d\n", is_active);
   //  We leaving the color-picker active mode and we have a target_sample
   //  recorded. In this case we want the target sample to be replaced by
   //  the current primay_sample.
   if(!is_active && data->target_sample)
   {
+    printf("... so copy back\n");
     //  Copy only the position & style for sample
     memcpy(&data->target_sample->point,
            &data->primary_sample.point,
@@ -530,11 +532,13 @@ static gboolean _live_sample_button(GtkWidget *widget,
     {
       printf("===================> record target sample\n");
       data->target_sample = sample;
-      darktable.lib->proxy.colorpicker.module = self;
+      // darktable.lib->proxy.colorpicker.module = self;
     }
 
-    dt_bauhaus_widget_set_quad_active(data->picker_button, !is_active);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->picker_button), !is_active);
+    g_signal_emit_by_name(G_OBJECT(data->picker_button), "toggled");
+    // gtk_toggle_button_toggled(GTK_TOGGLE_BUTTON(data->picker_button));
+    //dt_bauhaus_widget_set_quad_active(data->picker_button, !is_active);
 
     //  Record the current sample to be the modified (copied) one
 
