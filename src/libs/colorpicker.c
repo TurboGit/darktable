@@ -1,6 +1,6 @@
 /*
     This file is part of darktable,
-    Copyright (C) 2011-2023 darktable developers.
+    Copyright (C) 2011-2024 darktable developers.
 
     darktable is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -509,16 +509,22 @@ static gboolean _live_sample_button(GtkWidget *widget,
 
     printf("picker is active %d\n", is_active);
 
-    if(0 && is_active && data->target_sample)
+    if(is_active && data->target_sample)
     {
       printf("===================> copy back sample\n");
       //  Copy only the position & style for sample
       memcpy(&data->target_sample->point,
              &data->primary_sample.point,
              sizeof(data->primary_sample.point));
-      memcpy(&data->target_sample->box,
+      memcpy(&darktable.lib->proxy.colorpicker.selected_sample->box,
+             //&data->target_sample->box,
              &data->primary_sample.box,
              sizeof(data->primary_sample.box));
+      /*
+      memcpy(&darktable.lib->proxy.colorpicker.selected_sample->box,
+             &data->primary_sample.box,
+             sizeof(data->primary_sample.box));
+      */
       //  Size cannot be changed at this point, but in case this is done
       //  in the future.
       data->target_sample->size = data->primary_sample.size;
