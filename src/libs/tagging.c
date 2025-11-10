@@ -3835,7 +3835,6 @@ static void _lib_tagging_tag_show(dt_action_t *action)
     gtk_window_set_type_hint(GTK_WINDOW(d->floating_tag_window),
                              GDK_WINDOW_TYPE_HINT_POPUP_MENU);
     gtk_window_set_transient_for(GTK_WINDOW(d->floating_tag_window), GTK_WINDOW(window));
-    gtk_widget_set_opacity(d->floating_tag_window, 0.8);
   }
 
   GtkWidget *entry = gtk_entry_new();
@@ -3872,13 +3871,10 @@ static void _lib_tagging_tag_show(dt_action_t *action)
     rect.width = FLOATING_ENTRY_WIDTH;
     rect.height = 1;
     gtk_popover_set_pointing_to(GTK_POPOVER(d->floating_tag_window), &rect);
-    gtk_widget_show_all(d->floating_tag_window);
-    gtk_widget_grab_focus(entry);
     // Popover: don't call gtk_window_present()
   }
   else
   {
-    gtk_widget_show_all(d->floating_tag_window);
     gint px, py, w, h;
     gdk_window_get_origin(gtk_widget_get_window(center), &px, &py);
     w = gdk_window_get_width(gtk_widget_get_window(center));
@@ -3886,9 +3882,11 @@ static void _lib_tagging_tag_show(dt_action_t *action)
     const gint x = px + 0.5 * (w - FLOATING_ENTRY_WIDTH);
     const gint y = py + h - 50;
     gtk_window_move(GTK_WINDOW(d->floating_tag_window), x, y);
-    gtk_widget_grab_focus(entry);
     gtk_window_present(GTK_WINDOW(d->floating_tag_window));
   }
+
+  gtk_widget_show_all(d->floating_tag_window);
+  gtk_widget_grab_focus(entry);
 }
 
 static int _get_recent_tags_list_length()
