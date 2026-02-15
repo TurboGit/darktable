@@ -372,6 +372,12 @@ static void  _dt_style_update_iop_order(const gchar *name,
 
   if(update_iop_order || iop_list == NULL)
     iop_list = dt_ioppr_get_iop_order_list(imgid, FALSE);
+  else if(iop_list)
+  {
+    // let's ensure that the style iop-list contains entries for all known
+    // modules. That is, modules added after the style was created need to
+    // be added now.
+  }
 
   gchar *iop_list_txt = dt_ioppr_serialize_text_iop_order_list(iop_list);
 
