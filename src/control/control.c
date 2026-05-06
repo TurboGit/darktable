@@ -228,6 +228,14 @@ void dt_control_init(const gboolean withgui)
   s->toast_pos = s->toast_ack = 0;
   s->toast_message_timeout_id = 0;
 
+  // persistent log history initialization
+  s->log_history_count = 0;
+  s->log_history_write_idx = 0;
+  s->log_history_max = DT_CTL_LOG_HISTORY_SIZE;
+  s->log_history_msg = g_malloc0(sizeof(*s->log_history_msg) * s->log_history_max);
+  s->log_history_ts = g_malloc0(sizeof(*s->log_history_ts) * s->log_history_max);
+  dt_pthread_mutex_init(&s->log_history_mutex, NULL);
+
   pthread_cond_init(&s->cond, NULL);
   dt_pthread_mutex_init(&s->cond_mutex, NULL);
   dt_pthread_mutex_init(&s->queue_mutex, NULL);
@@ -441,6 +449,9 @@ void dt_control_cleanup(const gboolean withgui)
     dt_pthread_mutex_destroy(&s->queue_mutex);
     dt_pthread_mutex_destroy(&s->cond_mutex);
     dt_pthread_mutex_destroy(&s->log_mutex);
+    dt_pthread_mutex_destroy(&s->log_history_mutex);
+    g_free(s->log_history_msg);
+    g_free(s->log_history_ts);
     dt_pthread_mutex_destroy(&s->res_mutex);
     dt_pthread_mutex_destroy(&s->progress_system.mutex);
     if(s->shortcuts) g_sequence_free(s->shortcuts);
@@ -755,9 +766,6 @@ void dt_control_log(const char *msg, ...)
     dc->log_pos++;
   }
 
-  g_free(escaped_msg);
-  va_end(ap);
-
   if(timeout)
     g_source_remove(dc->log_message_timeout_id);
 
@@ -765,8 +773,73 @@ void dt_control_log(const char *msg, ...)
     = g_timeout_add(DT_CTL_LOG_TIMEOUT + 1000 * (msglen / 40),
                     _dt_ctl_log_message_timeout_callback, NULL);
   dt_pthread_mutex_unlock(&dc->log_mutex);
+
+  // store in persistent history (with deduplication)
+  dt_pthread_mutex_lock(&dc->log_history_mutex);
+  if(dc->log_history_count > 0)
+  {
+    const int last_idx = (dc->log_history_write_idx - 1 + dc->log_history_max) % dc->log_history_max;
+    if(g_strcmp0(escaped_msg, dc->log_history_msg[last_idx]) == 0)
+    {
+      g_free(escaped_msg);
+      va_end(ap);
+      dt_pthread_mutex_unlock(&dc->log_history_mutex);
+      // redraw center later in gui thread:
+      g_idle_add(_redraw_center, 0);
+      return;
+    }
+  }
+
+  // get current time
+  GDateTime *now = g_date_time_new_now_local();
+  gchar *timestamp = g_date_time_format(now, "%H:%M:%S");
+  g_date_time_unref(now);
+
+  const int idx = dc->log_history_write_idx % dc->log_history_max;
+  g_strlcpy(dc->log_history_msg[idx], escaped_msg, DT_CTL_LOG_MSG_SIZE);
+  g_strlcpy(dc->log_history_ts[idx], timestamp, 32);
+  g_free(timestamp);
+
+  dc->log_history_write_idx++;
+  dc->log_history_count++;
+  dt_pthread_mutex_unlock(&dc->log_history_mutex);
+
+  g_free(escaped_msg);
+  va_end(ap);
+
   // redraw center later in gui thread:
   g_idle_add(_redraw_center, 0);
+}
+
+int dt_control_log_history_get_entries(char **out_msgs, char **out_timestamps, int max_entries)
+{
+  dt_control_t *dc = darktable.control;
+  if(!dc) return 0;
+
+  dt_pthread_mutex_lock(&dc->log_history_mutex);
+
+  const int total = MIN(dc->log_history_count, dc->log_history_max);
+  const int to_return = MIN(total, max_entries);
+
+  if(to_return == 0 || !out_msgs || !out_timestamps)
+  {
+    dt_pthread_mutex_unlock(&dc->log_history_mutex);
+    return 0;
+  }
+
+  // start_idx points to the oldest entry we should return
+  // if count > max, the oldest entry is at write_idx % max (the one that was about to be overwritten)
+  const int start_idx = (dc->log_history_write_idx - to_return + dc->log_history_max) % dc->log_history_max;
+
+  for(int i = 0; i < to_return; i++)
+  {
+    const int idx = (start_idx + i) % dc->log_history_max;
+    out_msgs[i] = dc->log_history_msg[idx];
+    out_timestamps[i] = dc->log_history_ts[idx];
+  }
+
+  dt_pthread_mutex_unlock(&dc->log_history_mutex);
+  return to_return;
 }
 
 static void _toast_log(const gboolean markup, const char *msg, va_list ap)

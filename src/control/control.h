@@ -54,6 +54,7 @@ void dt_control_mouse_enter(void);
 gboolean dt_control_configure(GtkWidget *da, GdkEventConfigure *event, gpointer user_data);
 void dt_control_log(const char *msg, ...) __attribute__((format(printf, 1, 2)));
 void dt_control_log_ack_all(void);
+int dt_control_log_history_get_entries(char **out_msgs, char **out_timestamps, int max_entries);
 void dt_toast_log(const char *msg, ...) __attribute__((format(printf, 1, 2)));
 void dt_toast_markup_log(const char *msg, ...) __attribute__((format(printf, 1, 2)));
 void dt_control_busy_enter();
@@ -165,6 +166,15 @@ typedef struct dt_control_t
   int32_t toast_pos, toast_ack;
   char toast_message[DT_CTL_TOAST_SIZE][DT_CTL_TOAST_MSG_SIZE];
   guint toast_message_timeout_id;
+
+  // persistent log history
+#define DT_CTL_LOG_HISTORY_SIZE 1000
+  char (*log_history_msg)[DT_CTL_LOG_MSG_SIZE]; // circular buffer of messages
+  char (*log_history_ts)[32];                   // circular buffer of timestamps (HH:MM:SS)
+  int log_history_count;                        // total messages ever stored (for dedup check)
+  int log_history_write_idx;                    // next write position in circular buffer
+  int log_history_max;                          // capacity of circular buffer
+  dt_pthread_mutex_t log_history_mutex;         // mutex for history access
 
   // gui settings
   dt_pthread_mutex_t global_mutex, image_mutex;

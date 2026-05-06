@@ -2659,3 +2659,18 @@ popover *
 {
   background-color: @selected_bg_color;
 }
+
+/* log history drawer */
+#log-history-drawer
+{
+  background-color: @bg_color;
+  border: 1px solid @border_color;
+  border-bottom: none;
+}
+
+#log-history-text text
+{
+  font-family: monospace;
+  font-size: 0.85em;
+  background-color: @bg_color;
+}
