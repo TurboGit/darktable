@@ -28,11 +28,10 @@ DT_MODULE(1)
 typedef struct dt_lib_log_history_t
 {
   GtkWidget *button;
-  GtkWidget *drawer;
+  GtkWidget *dialog;
   GtkWidget *text_view;
   GtkTextBuffer *text_buffer;
   GtkTextMark *end_mark;
-  gboolean drawer_visible;
 } dt_lib_log_history_t;
 
 static void _populate_text_buffer(dt_lib_module_t *self);
@@ -66,18 +65,20 @@ int position(const dt_lib_module_t *self)
 static void _populate_text_buffer(dt_lib_module_t *self)
 {
   dt_lib_log_history_t *d = self->data;
-  if(!d || !d->text_buffer) return;
+  if(!d || !d->text_buffer || !d->dialog) return;
 
   char *msgs[DT_CTL_LOG_HISTORY_SIZE];
   char *timestamps[DT_CTL_LOG_HISTORY_SIZE];
 
   const int count = dt_control_log_history_get_entries(msgs, timestamps, DT_CTL_LOG_HISTORY_SIZE);
-  if(count == 0) return;
 
   gtk_text_buffer_set_text(d->text_buffer, "", -1);
 
+  if(count == 0) return;
+
   GtkTextIter iter;
   gtk_text_buffer_get_end_iter(d->text_buffer, &iter);
+  gtk_text_buffer_move_mark(d->text_buffer, d->end_mark, &iter);
 
   for(int i = 0; i < count; i++)
   {
@@ -85,16 +86,16 @@ static void _populate_text_buffer(dt_lib_module_t *self)
     gtk_text_buffer_insert(d->text_buffer, &iter, line, -1);
     g_free(line);
     gtk_text_buffer_get_end_iter(d->text_buffer, &iter);
+    gtk_text_buffer_move_mark(d->text_buffer, d->end_mark, &iter);
   }
 
-  // scroll to end
   gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(d->text_view), d->end_mark, 0.0, FALSE, 0.0, 0.0);
 }
 
 static void _log_redraw_callback(gpointer instance, dt_lib_module_t *self)
 {
   dt_lib_log_history_t *d = self->data;
-  if(d->drawer_visible)
+  if(d->dialog && gtk_widget_get_visible(d->dialog))
     _populate_text_buffer(self);
 }
 
@@ -103,28 +104,15 @@ static void _button_clicked(GtkWidget *widget, gpointer user_data)
   dt_lib_module_t *self = user_data;
   dt_lib_log_history_t *d = self->data;
 
-  d->drawer_visible = !d->drawer_visible;
-  gtk_widget_set_visible(d->drawer, d->drawer_visible);
+  d->dialog = gtk_dialog_new_with_buttons(_("log history"),
+                                          GTK_WINDOW(dt_ui_main_window(darktable.gui->ui)),
+                                          GTK_DIALOG_DESTROY_WITH_PARENT,
+                                          _("_Close"), GTK_RESPONSE_CLOSE,
+                                          NULL);
+  gtk_window_set_default_size(GTK_WINDOW(d->dialog),
+                              DT_PIXEL_APPLY_DPI(700),
+                              DT_PIXEL_APPLY_DPI(500));
 
-  if(d->drawer_visible)
-    _populate_text_buffer(self);
-
-  // update button appearance
-  dtgtk_button_set_paint(DTGTK_BUTTON(widget), dtgtk_cairo_paint_messages,
-                         (d->drawer_visible ? CPF_DIRECTION_DOWN : CPF_NONE), NULL);
-  gtk_widget_queue_draw(widget);
-}
-
-void gui_init(dt_lib_module_t *self)
-{
-  dt_lib_log_history_t *d = g_malloc0(sizeof(dt_lib_log_history_t));
-  self->data = d;
-
-  // main vertical box: drawer + button
-  self->widget = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  gtk_widget_set_name(self->widget, "log-history-container");
-
-  // drawer (scrolled window with text view)
   d->text_buffer = gtk_text_buffer_new(NULL);
   d->text_view = gtk_text_view_new_with_buffer(d->text_buffer);
   gtk_text_view_set_editable(GTK_TEXT_VIEW(d->text_view), FALSE);
@@ -137,32 +125,43 @@ void gui_init(dt_lib_module_t *self)
 
   GtkTextIter end_iter;
   gtk_text_buffer_get_end_iter(d->text_buffer, &end_iter);
-  d->end_mark = gtk_text_buffer_create_mark(d->text_buffer, NULL, &end_iter, FALSE);
+  d->end_mark = gtk_text_buffer_create_mark(d->text_buffer, NULL, &end_iter, TRUE);
 
-  d->drawer = gtk_scrolled_window_new(NULL, NULL);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(d->drawer),
+  GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(d->drawer),
-                                             DT_PIXEL_APPLY_DPI(150));
-  gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(d->drawer),
-                                             DT_PIXEL_APPLY_DPI(400));
-  gtk_container_add(GTK_CONTAINER(d->drawer), d->text_view);
-  gtk_widget_set_name(d->drawer, "log-history-drawer");
-  gtk_widget_set_visible(d->drawer, FALSE);
-  gtk_box_pack_start(GTK_BOX(self->widget), d->drawer, TRUE, TRUE, 0);
+  gtk_container_add(GTK_CONTAINER(scrolled), d->text_view);
+  gtk_widget_set_name(scrolled, "log-history-scrolled");
 
-  // button row
-  GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  dt_gui_dialog_add(GTK_DIALOG(d->dialog), scrolled);
+
+  _populate_text_buffer(self);
+
+  gtk_widget_show_all(d->dialog);
+
+  gtk_dialog_run(GTK_DIALOG(d->dialog));
+  gtk_widget_destroy(d->dialog);
+  d->dialog = NULL;
+  d->text_buffer = NULL;
+  d->text_view = NULL;
+  d->end_mark = NULL;
+}
+
+void gui_init(dt_lib_module_t *self)
+{
+  dt_lib_log_history_t *d = g_malloc0(sizeof(dt_lib_log_history_t));
+  self->data = d;
+  d->dialog = NULL;
+
+  self->widget = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
 
   d->button = dtgtk_button_new(dtgtk_cairo_paint_messages, CPF_NONE, NULL);
   gtk_widget_set_tooltip_text(d->button, _("view log history"));
   g_signal_connect(G_OBJECT(d->button), "clicked",
                    G_CALLBACK(_button_clicked), self);
 
-  gtk_box_pack_start(GTK_BOX(button_box), d->button, FALSE, FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(self->widget), button_box, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(self->widget), d->button, FALSE, FALSE, 0);
 
-  // connect to log redraw signal
   DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_CONTROL_LOG_REDRAW,
                             G_CALLBACK(_log_redraw_callback), self);
 }
@@ -172,6 +171,9 @@ void gui_cleanup(dt_lib_module_t *self)
   dt_lib_log_history_t *d = self->data;
 
   DT_CONTROL_SIGNAL_DISCONNECT(G_CALLBACK(_log_redraw_callback), self);
+
+  if(d->dialog)
+    gtk_widget_destroy(d->dialog);
 
   g_free(d);
   self->data = NULL;

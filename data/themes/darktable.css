@@ -2660,12 +2660,10 @@ popover *
   background-color: @selected_bg_color;
 }
 
-/* log history drawer */
-#log-history-drawer
+/* log history dialog */
+#log-history-scrolled
 {
   background-color: @bg_color;
-  border: 1px solid @border_color;
-  border-bottom: none;
 }
 
 #log-history-text text
