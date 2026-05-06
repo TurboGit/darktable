@@ -118,7 +118,10 @@ static gboolean _button_press_release(GtkWidget *button,
     if(gtk_widget_is_visible(d->popover))
       gtk_popover_popdown(GTK_POPOVER(d->popover));
     else
+    {
+      _populate_text_buffer(self);
       gtk_popover_popup(GTK_POPOVER(d->popover));
+    }
     return TRUE;
   }
   else
@@ -165,6 +168,7 @@ void gui_init(dt_lib_module_t *self)
   gtk_widget_set_name(scrolled, "log-history-scrolled");
 
   gtk_container_add(GTK_CONTAINER(d->popover), scrolled);
+  gtk_widget_show_all(scrolled);
 
   g_signal_connect(G_OBJECT(d->button), "button-press-event",
                    G_CALLBACK(_button_press_release), self);
