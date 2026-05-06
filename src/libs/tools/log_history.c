@@ -120,6 +120,7 @@ static gboolean _button_press_release(GtkWidget *button,
     else
     {
       _populate_text_buffer(self);
+      gtk_widget_show_all(d->popover);
       gtk_popover_popup(GTK_POPOVER(d->popover));
     }
     return TRUE;
@@ -144,6 +145,9 @@ void gui_init(dt_lib_module_t *self)
   d->popover = gtk_popover_new(d->button);
   gtk_widget_set_name(d->popover, "log-history-popover");
   gtk_popover_set_position(GTK_POPOVER(d->popover), GTK_POS_TOP);
+  gtk_widget_set_size_request(d->popover,
+                              DT_PIXEL_APPLY_DPI(800),
+                              DT_PIXEL_APPLY_DPI(300));
 
   d->text_buffer = gtk_text_buffer_new(NULL);
   d->text_view = gtk_text_view_new_with_buffer(d->text_buffer);
