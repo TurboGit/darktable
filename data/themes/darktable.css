@@ -2661,20 +2661,21 @@ popover *
 }
 
 /* log history popover */
-popover#log-history-popover,
-popover#log-history-popover > box,
-popover#log-history-popover > grid
+#log-history-popover,
+#log-history-popover > box,
+#log-history-popover box,
+#log-history-popover .content
 {
-  padding: 0;
-  margin: 0;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
-#log-history-scrolled
+#log-history-popover scrolledwindow
 {
   background-color: @bg_color;
   border: none;
-  margin: 0;
   padding: 0;
+  margin: 0;
 }
 
 #log-history-text text
