@@ -120,6 +120,7 @@ static gboolean _button_press_release(GtkWidget *button,
     else
     {
       _populate_text_buffer(self);
+      gtk_widget_show_all(d->popover);
       gtk_popover_popup(GTK_POPOVER(d->popover));
     }
     return TRUE;
@@ -167,6 +168,7 @@ void gui_init(dt_lib_module_t *self)
                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
   gtk_container_add(GTK_CONTAINER(scrolled), d->text_view);
   gtk_container_add(GTK_CONTAINER(d->popover), scrolled);
+  gtk_widget_show_all(scrolled);
 
   g_signal_connect(G_OBJECT(d->button), "button-press-event",
                    G_CALLBACK(_button_press_release), self);
