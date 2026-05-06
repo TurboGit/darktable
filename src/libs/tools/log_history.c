@@ -28,7 +28,7 @@ DT_MODULE(1)
 typedef struct dt_lib_log_history_t
 {
   GtkWidget *button;
-  GtkWidget *dialog;
+  GtkWidget *popover;
   GtkWidget *text_view;
   GtkTextBuffer *text_buffer;
   GtkTextMark *end_mark;
@@ -36,6 +36,9 @@ typedef struct dt_lib_log_history_t
 
 static void _populate_text_buffer(dt_lib_module_t *self);
 static void _log_redraw_callback(gpointer instance, dt_lib_module_t *self);
+static gboolean _button_press_release(GtkWidget *button,
+                                      GdkEventButton *event,
+                                      dt_lib_module_t *self);
 
 const char *name(dt_lib_module_t *self)
 {
@@ -65,7 +68,7 @@ int position(const dt_lib_module_t *self)
 static void _populate_text_buffer(dt_lib_module_t *self)
 {
   dt_lib_log_history_t *d = self->data;
-  if(!d || !d->text_buffer || !d->dialog) return;
+  if(!d || !d->text_buffer) return;
 
   char *msgs[DT_CTL_LOG_HISTORY_SIZE];
   char *timestamps[DT_CTL_LOG_HISTORY_SIZE];
@@ -95,23 +98,51 @@ static void _populate_text_buffer(dt_lib_module_t *self)
 static void _log_redraw_callback(gpointer instance, dt_lib_module_t *self)
 {
   dt_lib_log_history_t *d = self->data;
-  if(d->dialog && gtk_widget_get_visible(d->dialog))
+  if(d->popover && gtk_widget_is_visible(d->popover))
     _populate_text_buffer(self);
 }
 
-static void _button_clicked(GtkWidget *widget, gpointer user_data)
+static gboolean _button_press_release(GtkWidget *button,
+                                      GdkEventButton *event,
+                                      dt_lib_module_t *self)
 {
-  dt_lib_module_t *self = user_data;
-  dt_lib_log_history_t *d = self->data;
+  static guint start_time = 0;
 
-  d->dialog = gtk_dialog_new_with_buttons(_("log history"),
-                                          GTK_WINDOW(dt_ui_main_window(darktable.gui->ui)),
-                                          GTK_DIALOG_DESTROY_WITH_PARENT,
-                                          _("_Close"), GTK_RESPONSE_CLOSE,
-                                          NULL);
-  gtk_window_set_default_size(GTK_WINDOW(d->dialog),
-                              DT_PIXEL_APPLY_DPI(700),
-                              DT_PIXEL_APPLY_DPI(500));
+  int delay = 0;
+  g_object_get(gtk_settings_get_default(), "gtk-long-press-time", &delay, NULL);
+
+  if((event->type == GDK_BUTTON_PRESS && event->button == GDK_BUTTON_SECONDARY) ||
+     (event->type == GDK_BUTTON_RELEASE && event->time - start_time > delay))
+  {
+    dt_lib_log_history_t *d = self->data;
+    if(gtk_widget_is_visible(d->popover))
+      gtk_popover_popdown(GTK_POPOVER(d->popover));
+    else
+      gtk_popover_popup(GTK_POPOVER(d->popover));
+    return TRUE;
+  }
+  else
+  {
+    start_time = event->time;
+    return FALSE;
+  }
+}
+
+void gui_init(dt_lib_module_t *self)
+{
+  dt_lib_log_history_t *d = g_malloc0(sizeof(dt_lib_log_history_t));
+  self->data = d;
+
+  self->widget = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+
+  d->button = dtgtk_button_new(dtgtk_cairo_paint_messages, CPF_NONE, NULL);
+  gtk_widget_set_tooltip_text(d->button, _("view log history\n(right-click to open)"));
+
+  d->popover = gtk_popover_new(d->button);
+  gtk_popover_set_position(GTK_POPOVER(d->popover), GTK_POS_TOP);
+  gtk_widget_set_size_request(d->popover,
+                              DT_PIXEL_APPLY_DPI(500),
+                              DT_PIXEL_APPLY_DPI(300));
 
   d->text_buffer = gtk_text_buffer_new(NULL);
   d->text_view = gtk_text_view_new_with_buffer(d->text_buffer);
@@ -133,32 +164,12 @@ static void _button_clicked(GtkWidget *widget, gpointer user_data)
   gtk_container_add(GTK_CONTAINER(scrolled), d->text_view);
   gtk_widget_set_name(scrolled, "log-history-scrolled");
 
-  dt_gui_dialog_add(GTK_DIALOG(d->dialog), scrolled);
+  gtk_container_add(GTK_CONTAINER(d->popover), scrolled);
 
-  _populate_text_buffer(self);
-
-  gtk_widget_show_all(d->dialog);
-
-  gtk_dialog_run(GTK_DIALOG(d->dialog));
-  gtk_widget_destroy(d->dialog);
-  d->dialog = NULL;
-  d->text_buffer = NULL;
-  d->text_view = NULL;
-  d->end_mark = NULL;
-}
-
-void gui_init(dt_lib_module_t *self)
-{
-  dt_lib_log_history_t *d = g_malloc0(sizeof(dt_lib_log_history_t));
-  self->data = d;
-  d->dialog = NULL;
-
-  self->widget = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-
-  d->button = dtgtk_button_new(dtgtk_cairo_paint_messages, CPF_NONE, NULL);
-  gtk_widget_set_tooltip_text(d->button, _("view log history"));
-  g_signal_connect(G_OBJECT(d->button), "clicked",
-                   G_CALLBACK(_button_clicked), self);
+  g_signal_connect(G_OBJECT(d->button), "button-press-event",
+                   G_CALLBACK(_button_press_release), self);
+  g_signal_connect(G_OBJECT(d->button), "button-release-event",
+                   G_CALLBACK(_button_press_release), self);
 
   gtk_box_pack_start(GTK_BOX(self->widget), d->button, FALSE, FALSE, 0);
 
@@ -172,8 +183,8 @@ void gui_cleanup(dt_lib_module_t *self)
 
   DT_CONTROL_SIGNAL_DISCONNECT(G_CALLBACK(_log_redraw_callback), self);
 
-  if(d->dialog)
-    gtk_widget_destroy(d->dialog);
+  if(d->popover)
+    gtk_widget_destroy(d->popover);
 
   g_free(d);
   self->data = NULL;
