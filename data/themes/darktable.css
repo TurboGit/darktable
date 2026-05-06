@@ -2666,20 +2666,25 @@ popover#log-history-popover
   padding: 0;
 }
 
+popover#log-history-popover scrolledwindow,
+popover#log-history-popover viewport,
+popover#log-history-popover textview,
+popover#log-history-popover textview text
+{
+  margin: 0;
+  padding: 0;
+}
+
 popover#log-history-popover scrolledwindow
 {
   background-color: @bg_color;
   border: none;
-  padding: 0;
-  margin: 0;
 }
 
 popover#log-history-popover textview
 {
   background-color: @bg_color;
   color: @fg_color;
-  margin: 0;
-  padding: 0.2em;
 }
 
 popover#log-history-popover textview text

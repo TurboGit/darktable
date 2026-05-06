@@ -148,6 +148,10 @@ void gui_init(dt_lib_module_t *self)
   gtk_widget_set_size_request(d->popover,
                               DT_PIXEL_APPLY_DPI(500),
                               DT_PIXEL_APPLY_DPI(300));
+  gtk_widget_set_margin_start(d->popover, 0);
+  gtk_widget_set_margin_end(d->popover, 0);
+  gtk_widget_set_margin_top(d->popover, 0);
+  gtk_widget_set_margin_bottom(d->popover, 0);
 
   d->text_buffer = gtk_text_buffer_new(NULL);
   d->text_view = gtk_text_view_new_with_buffer(d->text_buffer);
@@ -158,6 +162,10 @@ void gui_init(dt_lib_module_t *self)
   gtk_text_view_set_top_margin(GTK_TEXT_VIEW(d->text_view), 4);
   gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(d->text_view), 4);
   gtk_widget_set_name(d->text_view, "log-history-text");
+  gtk_widget_set_margin_start(d->text_view, 0);
+  gtk_widget_set_margin_end(d->text_view, 0);
+  gtk_widget_set_margin_top(d->text_view, 0);
+  gtk_widget_set_margin_bottom(d->text_view, 0);
 
   GtkTextIter end_iter;
   gtk_text_buffer_get_end_iter(d->text_buffer, &end_iter);
@@ -166,6 +174,10 @@ void gui_init(dt_lib_module_t *self)
   GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_margin_start(scrolled, 0);
+  gtk_widget_set_margin_end(scrolled, 0);
+  gtk_widget_set_margin_top(scrolled, 0);
+  gtk_widget_set_margin_bottom(scrolled, 0);
   gtk_container_add(GTK_CONTAINER(scrolled), d->text_view);
   gtk_container_add(GTK_CONTAINER(d->popover), scrolled);
   gtk_widget_show_all(scrolled);
