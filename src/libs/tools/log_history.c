@@ -142,7 +142,9 @@ void gui_init(dt_lib_module_t *self)
   gtk_widget_set_tooltip_text(d->button, _("view log history\n(right-click to open)"));
 
   d->popover = gtk_popover_new(d->button);
+  gtk_widget_set_name(d->popover, "log-history-popover");
   gtk_popover_set_position(GTK_POPOVER(d->popover), GTK_POS_TOP);
+  gtk_container_set_border_width(GTK_CONTAINER(d->popover), 0);
   gtk_widget_set_size_request(d->popover,
                               DT_PIXEL_APPLY_DPI(500),
                               DT_PIXEL_APPLY_DPI(300));
@@ -151,8 +153,8 @@ void gui_init(dt_lib_module_t *self)
   d->text_view = gtk_text_view_new_with_buffer(d->text_buffer);
   gtk_text_view_set_editable(GTK_TEXT_VIEW(d->text_view), FALSE);
   gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(d->text_view), FALSE);
-  gtk_text_view_set_left_margin(GTK_TEXT_VIEW(d->text_view), 4);
-  gtk_text_view_set_right_margin(GTK_TEXT_VIEW(d->text_view), 4);
+  gtk_text_view_set_left_margin(GTK_TEXT_VIEW(d->text_view), 6);
+  gtk_text_view_set_right_margin(GTK_TEXT_VIEW(d->text_view), 6);
   gtk_text_view_set_top_margin(GTK_TEXT_VIEW(d->text_view), 4);
   gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(d->text_view), 4);
   gtk_widget_set_name(d->text_view, "log-history-text");
@@ -166,8 +168,16 @@ void gui_init(dt_lib_module_t *self)
                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
   gtk_container_add(GTK_CONTAINER(scrolled), d->text_view);
   gtk_widget_set_name(scrolled, "log-history-scrolled");
+  gtk_widget_set_margin_top(scrolled, 0);
+  gtk_widget_set_margin_bottom(scrolled, 0);
+  gtk_widget_set_margin_start(scrolled, 0);
+  gtk_widget_set_margin_end(scrolled, 0);
+  gtk_widget_set_hexpand(d->text_view, TRUE);
+  gtk_widget_set_vexpand(d->text_view, TRUE);
 
   gtk_container_add(GTK_CONTAINER(d->popover), scrolled);
+  gtk_widget_set_hexpand(scrolled, TRUE);
+  gtk_widget_set_vexpand(scrolled, TRUE);
   gtk_widget_show_all(scrolled);
 
   g_signal_connect(G_OBJECT(d->button), "button-press-event",

@@ -2660,10 +2660,21 @@ popover *
   background-color: @selected_bg_color;
 }
 
-/* log history dialog */
+/* log history popover */
+popover#log-history-popover,
+popover#log-history-popover > box,
+popover#log-history-popover > grid
+{
+  padding: 0;
+  margin: 0;
+}
+
 #log-history-scrolled
 {
   background-color: @bg_color;
+  border: none;
+  margin: 0;
+  padding: 0;
 }
 
 #log-history-text text
