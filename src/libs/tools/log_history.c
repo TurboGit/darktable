@@ -147,10 +147,6 @@ void gui_init(dt_lib_module_t *self)
   gtk_widget_set_size_request(d->popover,
                               DT_PIXEL_APPLY_DPI(500),
                               DT_PIXEL_APPLY_DPI(300));
-  gtk_widget_set_margin_start(d->popover, 0);
-  gtk_widget_set_margin_end(d->popover, 0);
-  gtk_widget_set_margin_top(d->popover, 0);
-  gtk_widget_set_margin_bottom(d->popover, 0);
 
   d->text_buffer = gtk_text_buffer_new(NULL);
   d->text_view = gtk_text_view_new_with_buffer(d->text_buffer);
@@ -169,18 +165,8 @@ void gui_init(dt_lib_module_t *self)
   GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_name(scrolled, "log-history-scrolled");
-
-  GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  gtk_box_pack_start(GTK_BOX(vbox), scrolled, TRUE, TRUE, 0);
   gtk_container_add(GTK_CONTAINER(scrolled), d->text_view);
-  gtk_container_add(GTK_CONTAINER(d->popover), vbox);
-
-  /* counteract default popover padding */
-  gtk_widget_set_margin_start(vbox, -6);
-  gtk_widget_set_margin_end(vbox, -6);
-  gtk_widget_set_margin_top(vbox, -6);
-  gtk_widget_set_margin_bottom(vbox, -6);
+  gtk_container_add(GTK_CONTAINER(d->popover), scrolled);
 
   g_signal_connect(G_OBJECT(d->button), "button-press-event",
                    G_CALLBACK(_button_press_release), self);
