@@ -919,7 +919,7 @@ void dt_lib_gui_update(dt_lib_module_t *module)
     module->gui_uptodate = TRUE;
   }
 
-  if(module && module->has_preset_label(module))
+  if(false && module && module->has_preset_label(module))
   {
     dt_lib_module_info_t *mi = _get_module_info_for_module(module);
     gchar *active_preset_name = dt_lib_get_active_preset_name(mi);
