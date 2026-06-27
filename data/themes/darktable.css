@@ -1339,6 +1339,13 @@ filechooser row:hover .sidebar-icon
   padding: 0.14em 0.84em;
 }
 
+#theme-variant
+{
+  margin-left: 2em;
+  padding-left: 0.5em;
+  min-height: 1.5em;
+}
+
 /*--------------------
   - Quick access tab -
   --------------------*/

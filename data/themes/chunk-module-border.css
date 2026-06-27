@@ -1,0 +1,22 @@
+
+@define-color plugin_focus_border_color shade(@plugin_bg_color, 2.0);
+@define-color plugin_expanded_border_color shade(@plugin_bg_color, 0.5);
+
+/* ensure space for border is reserved for all modules */
+#iop-expander.vertical
+{
+  border: 0.1em transparent;
+  margin: 0.2em 0.2em 0 0.2em;
+}
+
+/* light border for focused modules */
+#iop-expander.dt_module_expanded.dt_module_focus
+{
+  border: 0.1em solid @plugin_focus_border_color;
+}
+
+/* dark border for expanded modules */
+#iop-expander.dt_module_expanded
+{
+  border: 0.1em solid @plugin_expanded_border_color;
+}

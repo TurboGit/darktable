@@ -3709,6 +3709,42 @@ void dt_gui_load_theme(const char *theme)
     _add_theme_import(&themecss, datadir, "themes", "chunk-condensed.css");
   }
 
+  // chunk-rounded-header
+
+  if(dt_conf_get_bool("themes/rounded-header"))
+  {
+    _add_theme_import(&themecss, datadir, "themes", "chunk-rounded-header.css");
+  }
+
+  // chunk-rounded-header
+
+  const int index = dt_conf_get_int("themes/colored-accent");
+
+  if(index > 0)
+  {
+    const char *colors[] =
+        {
+            "none",
+            "green",
+            "blue",
+            "yellow",
+            "orange"
+        };
+
+    char *chunk = g_strdup_printf
+      ("chunk-%s-colored-accent.css",
+       colors[index]);
+    _add_theme_import(&themecss, datadir, "themes", chunk);
+    g_free(chunk);
+  }
+
+  // chunk-module-border
+
+  if(dt_conf_get_bool("themes/module-border"))
+  {
+    _add_theme_import(&themecss, datadir, "themes", "chunk-module-border.css");
+  }
+
   // load any OS specific themes tweak file to fix some platform specific issues
 
 #ifdef __APPLE__
