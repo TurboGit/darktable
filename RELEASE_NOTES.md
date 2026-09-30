@@ -150,6 +150,10 @@ changes (where available).
   SpyderCheckr 48. As far as we know, there never was a separate 2018
   version of these charts.
 
+- In the "select parts to copy" and "select parts to paste" history
+  dialogs, the module order is now a check box below the item list
+  instead of a last entry in the list itself.
+
 ## Performance Improvements
 
 - Replaced quadratic XMP history writes with a linear algorithm.
@@ -425,6 +429,9 @@ changes (where available).
   slightly wrong until the module was adjusted again.
 
 - Fixed a crash on Wayland when disconnecting a monitor.
+
+- Copying a whole history stack no longer carries over the module order
+  that was selected in an earlier "copy parts of the history" dialog.
 
 ## Lua
 
