@@ -145,6 +145,31 @@ guint dt_util_str_occurence(const gchar *haystack,
   return o;
 }
 
+char *dt_util_str_case_str(const char *haystack,
+                           const char *needle)
+{
+  char *match = NULL;
+  if(haystack && needle)
+  {
+    char *d_haystack = g_utf8_strdown(haystack, -1);
+    char *d_needle = g_utf8_strdown(needle, -1);
+
+    match = g_strstr_len(d_haystack, strlen(d_haystack), d_needle);
+
+    // and finally match must point to the corresponding position in
+    // the original haystack.
+    if(match)
+    {
+      const int offset = match - d_haystack;
+      match = (char *)(haystack + offset);
+    }
+
+    g_free(d_haystack);
+    g_free(d_needle);
+  }
+  return match;
+}
+
 gchar *dt_util_float_to_str(const gchar *format,
                             const double value)
 {

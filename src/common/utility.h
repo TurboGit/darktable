@@ -57,6 +57,12 @@ gchar *dt_util_glist_to_str(const gchar *separator,
     separator. the result has to be freed. */
 GList *dt_util_str_to_glist(const gchar *separator,
                             const gchar *text);
+
+/** case-insensitive search for needle in haystack;
+    returns pointer to first match or NULL */
+char *dt_util_str_case_str(const char *haystack,
+                           const char *needle);
+
 /** take a list of strings and remove all duplicates. the result will be sorted. */
 GList *dt_util_glist_uniq(GList *items);
 /** fixes the given path by replacing a possible tilde with the correct home directory */
